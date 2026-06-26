@@ -14,13 +14,24 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ThemeProvider } from "@/context/ThemeContext";
 import { WorkoutProvider } from "@/context/WorkoutContext";
+import { useColors } from "@/hooks/useColors";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
+  const colors = useColors();
+
+  const darkHeader = {
+    headerStyle: { backgroundColor: colors.card },
+    headerTintColor: colors.foreground,
+    headerTitleStyle: { fontFamily: "Inter_600SemiBold", fontSize: 17 },
+    headerShadowVisible: false,
+  };
+
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -35,51 +46,17 @@ function RootLayoutNav() {
       />
       <Stack.Screen
         name="new-exercise"
-        options={{
-          title: "New Exercise",
-          headerStyle: { backgroundColor: "#0A0A0A" },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: {
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 17,
-          },
-        }}
+        options={{ title: "New Exercise", ...darkHeader }}
       />
       <Stack.Screen
         name="create-routine"
-        options={{
-          title: "Create Routine",
-          headerStyle: { backgroundColor: "#0A0A0A" },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: {
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 17,
-          },
-        }}
+        options={{ title: "Create Routine", ...darkHeader }}
       />
-      <Stack.Screen
-        name="exercise-detail"
-        options={{
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="workout-detail"
-        options={{
-          headerShown: false,
-        }}
-      />
+      <Stack.Screen name="exercise-detail" options={{ headerShown: false }} />
+      <Stack.Screen name="workout-detail" options={{ headerShown: false }} />
       <Stack.Screen
         name="edit-exercise"
-        options={{
-          title: "Edit Exercise",
-          headerStyle: { backgroundColor: "#0A0A0A" },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: {
-            fontFamily: "Inter_600SemiBold",
-            fontSize: 17,
-          },
-        }}
+        options={{ title: "Edit Exercise", ...darkHeader }}
       />
     </Stack>
   );
@@ -103,17 +80,19 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <WorkoutProvider>
-            <GestureHandlerRootView>
-              <KeyboardProvider>
-                <RootLayoutNav />
-              </KeyboardProvider>
-            </GestureHandlerRootView>
-          </WorkoutProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
+      <ThemeProvider>
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <WorkoutProvider>
+              <GestureHandlerRootView>
+                <KeyboardProvider>
+                  <RootLayoutNav />
+                </KeyboardProvider>
+              </GestureHandlerRootView>
+            </WorkoutProvider>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

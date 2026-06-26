@@ -1,4 +1,4 @@
-const kineticPalette = {
+const darkPalette = {
   text: "#FFFFFF",
   tint: "#D4FF00",
   background: "#0A0A0A",
@@ -19,9 +19,30 @@ const kineticPalette = {
   input: "#161616",
 };
 
+const lightPalette = {
+  text: "#0A0A0A",
+  tint: "#8AAE00",
+  background: "#F4F4F4",
+  foreground: "#0A0A0A",
+  card: "#FFFFFF",
+  cardForeground: "#0A0A0A",
+  primary: "#8AAE00",
+  primaryForeground: "#FFFFFF",
+  secondary: "#EFEFEF",
+  secondaryForeground: "#0A0A0A",
+  muted: "#EFEFEF",
+  mutedForeground: "#888888",
+  accent: "#8AAE00",
+  accentForeground: "#FFFFFF",
+  destructive: "#EF4444",
+  destructiveForeground: "#FFFFFF",
+  border: "#E2E2E2",
+  input: "#FFFFFF",
+};
+
 const colors = {
-  light: kineticPalette,
-  dark: kineticPalette,
+  light: lightPalette,
+  dark: darkPalette,
   radius: 10,
 };
 
