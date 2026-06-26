@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { router } from "expo-router";
 import React from "react";
 import {
   FlatList,
@@ -32,8 +33,7 @@ function formatDate(dateStr: string) {
 function calcVolume(log: WorkoutLog) {
   return log.entries.reduce(
     (t, e) =>
-      t +
-      e.sets.reduce((s, set) => s + (set.weight ?? 0) * (set.reps ?? 1), 0),
+      t + e.sets.reduce((s, set) => s + (set.weight ?? 0) * (set.reps ?? 1), 0),
     0
   );
 }
@@ -46,6 +46,9 @@ function WorkoutLogCard({ log }: { log: WorkoutLog }) {
     <TouchableOpacity
       style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
       activeOpacity={0.7}
+      onPress={() =>
+        router.push({ pathname: "/workout-detail", params: { logId: log.id } })
+      }
     >
       <View style={styles.cardHeader}>
         <View>
@@ -60,10 +63,13 @@ function WorkoutLogCard({ log }: { log: WorkoutLog }) {
             })}
           </Text>
         </View>
-        <View style={[styles.volumeTag, { backgroundColor: `${colors.primary}15` }]}>
-          <Text style={[styles.volumeText, { color: colors.primary }]}>
-            {Math.round(volume).toLocaleString()} kg
-          </Text>
+        <View style={styles.rightCol}>
+          <View style={[styles.volumeTag, { backgroundColor: `${colors.primary}15` }]}>
+            <Text style={[styles.volumeText, { color: colors.primary }]}>
+              {Math.round(volume).toLocaleString()} kg
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
         </View>
       </View>
 
@@ -86,13 +92,19 @@ function WorkoutLogCard({ log }: { log: WorkoutLog }) {
 
       <View style={styles.exerciseList}>
         {log.entries.slice(0, 3).map((entry, i) => (
-          <Text key={i} style={[styles.exerciseName, { color: colors.mutedForeground }]}>
-            · {entry.exerciseName}
-          </Text>
+          <View key={i} style={styles.exerciseRow}>
+            <View style={[styles.exerciseDot, { backgroundColor: colors.primary }]} />
+            <Text style={[styles.exerciseName, { color: colors.mutedForeground }]}>
+              {entry.exerciseName}
+            </Text>
+            <Text style={[styles.exerciseSets, { color: colors.mutedForeground }]}>
+              {entry.sets.length} sets
+            </Text>
+          </View>
         ))}
         {log.entries.length > 3 && (
-          <Text style={[styles.exerciseName, { color: colors.mutedForeground }]}>
-            +{log.entries.length - 3} more
+          <Text style={[styles.moreText, { color: colors.mutedForeground }]}>
+            +{log.entries.length - 3} more exercises
           </Text>
         )}
       </View>
@@ -127,7 +139,7 @@ export default function HistoryScreen() {
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.foreground }]}>History</Text>
             <Text style={[styles.count, { color: colors.mutedForeground }]}>
-              {workoutLogs.length} sessions total
+              {workoutLogs.length} sessions total · tap to view details
             </Text>
           </View>
         }
@@ -150,22 +162,10 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  list: {
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  header: {
-    marginBottom: 4,
-    gap: 4,
-  },
-  title: {
-    fontSize: 28,
-    fontFamily: "Inter_700Bold",
-  },
-  count: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-  },
+  list: { paddingHorizontal: 20, gap: 12 },
+  header: { marginBottom: 4, gap: 4 },
+  title: { fontSize: 28, fontFamily: "Inter_700Bold" },
+  count: { fontSize: 13, fontFamily: "Inter_400Regular" },
   card: {
     borderRadius: 14,
     borderWidth: 1,
@@ -177,57 +177,43 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
-  dateText: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-  },
-  fullDate: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-    marginTop: 2,
+  dateText: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  fullDate: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  rightCol: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   volumeTag: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
-  volumeText: {
-    fontSize: 13,
-    fontFamily: "Inter_700Bold",
-  },
-  divider: {
-    height: 1,
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: 16,
-  },
-  stat: {
+  volumeText: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  divider: { height: 1 },
+  statsRow: { flexDirection: "row", gap: 16 },
+  stat: { flexDirection: "row", alignItems: "center", gap: 5 },
+  statText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  exerciseList: { gap: 6 },
+  exerciseRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 8,
   },
-  statText: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
+  exerciseDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
   },
-  exerciseList: {
-    gap: 2,
-  },
-  exerciseName: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-  },
+  exerciseName: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
+  exerciseSets: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  moreText: { fontSize: 12, fontFamily: "Inter_400Regular", marginLeft: 13 },
   emptyBox: {
     alignItems: "center",
     paddingTop: 80,
     gap: 12,
   },
-  emptyTitle: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
-    marginTop: 8,
-  },
+  emptyTitle: { fontSize: 18, fontFamily: "Inter_700Bold", marginTop: 8 },
   emptyHint: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",

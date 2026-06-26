@@ -175,7 +175,12 @@ export default function HomeScreen() {
               <LogEntryCard
                 key={entry.id}
                 entry={entry}
-                onPress={() => router.push("/quick-log")}
+                onPress={() =>
+                  router.push({
+                    pathname: "/exercise-detail",
+                    params: { entryId: entry.id },
+                  })
+                }
               />
             ))}
           </View>

@@ -57,6 +57,30 @@ function RootLayoutNav() {
           },
         }}
       />
+      <Stack.Screen
+        name="exercise-detail"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="workout-detail"
+        options={{
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="edit-exercise"
+        options={{
+          title: "Edit Exercise",
+          headerStyle: { backgroundColor: "#0A0A0A" },
+          headerTintColor: "#FFFFFF",
+          headerTitleStyle: {
+            fontFamily: "Inter_600SemiBold",
+            fontSize: 17,
+          },
+        }}
+      />
     </Stack>
   );
 }

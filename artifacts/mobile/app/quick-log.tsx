@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Modal,
@@ -18,16 +18,27 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NumberPad } from "@/components/NumberPad";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
-import type { Exercise, SetEntry } from "@/types/workout";
+import type { Exercise } from "@/types/workout";
 
-type ActiveField = "weight" | "reps" | "sets";
+type ActiveField = "weight" | "reps";
+
+interface SetRow {
+  id: string;
+  weight: string;
+  reps: string;
+}
+
+function makeSet(weight = "0", reps = "8"): SetRow {
+  return {
+    id: Math.random().toString(36).substr(2, 9),
+    weight,
+    reps,
+  };
+}
 
 function applyKey(current: string, key: string): string {
   if (key === "⌫") return current.length > 1 ? current.slice(0, -1) : "0";
-  if (key === ".") {
-    if (current.includes(".")) return current;
-    return current + ".";
-  }
+  if (key === ".") return current.includes(".") ? current : current + ".";
   if (current === "0") return key;
   if (current.length >= 6) return current;
   return current + key;
@@ -37,79 +48,117 @@ export default function QuickLogScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { exerciseId } = useLocalSearchParams<{ exerciseId?: string }>();
-  const { exercises, addWorkoutEntry, getLastEntryForExercise, todayLog } = useWorkout();
+  const { exercises, addWorkoutEntry, getLastEntryForExercise } = useWorkout();
 
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
+
+  const [sets, setSets] = useState<SetRow[]>([makeSet()]);
+  const [activeSetId, setActiveSetId] = useState<string>(sets[0]!.id);
   const [activeField, setActiveField] = useState<ActiveField>("weight");
-
-  const [weight, setWeight] = useState("0");
-  const [reps, setReps] = useState("8");
-  const [sets, setSets] = useState("4");
   const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    if (exerciseId) {
-      const ex = exercises.find((e) => e.id === exerciseId);
-      if (ex) setSelectedExercise(ex);
-    } else if (exercises.length > 0 && !selectedExercise) {
-      setShowPicker(true);
-    }
-  }, [exerciseId, exercises]);
 
   const lastEntry = useMemo(
     () => (selectedExercise ? getLastEntryForExercise(selectedExercise.id) : null),
     [selectedExercise, getLastEntryForExercise]
   );
 
-  const todayEntry = useMemo(() => {
-    if (!selectedExercise || !todayLog) return null;
-    return todayLog.entries.find((e) => e.exerciseId === selectedExercise.id) ?? null;
-  }, [selectedExercise, todayLog]);
-
-  const lastWeight = lastEntry?.sets[0]?.weight;
-  const lastReps = lastEntry?.sets[0]?.reps;
+  useEffect(() => {
+    if (exerciseId) {
+      const ex = exercises.find((e) => e.id === exerciseId);
+      if (ex) setSelectedExercise(ex);
+    } else {
+      setShowPicker(true);
+    }
+  }, [exerciseId, exercises]);
 
   useEffect(() => {
-    if (lastWeight != null) setWeight(lastWeight.toString());
-    if (lastReps != null) setReps(lastReps.toString());
-    if (lastEntry?.sets.length) setSets(lastEntry.sets.length.toString());
+    if (lastEntry && lastEntry.sets.length > 0) {
+      const prefilled = lastEntry.sets.map((s) =>
+        makeSet(
+          s.weight != null ? s.weight.toString() : "0",
+          s.reps != null ? s.reps.toString() : "8"
+        )
+      );
+      setSets(prefilled);
+      setActiveSetId(prefilled[0]!.id);
+    }
   }, [lastEntry]);
 
   const handleNumPad = useCallback(
     (key: string) => {
-      if (activeField === "weight") setWeight((v) => applyKey(v, key));
-      else if (activeField === "reps") setReps((v) => applyKey(v, key));
-      else setSets((v) => applyKey(v, key));
+      setSets((prev) =>
+        prev.map((s) => {
+          if (s.id !== activeSetId) return s;
+          if (activeField === "weight")
+            return { ...s, weight: applyKey(s.weight, key) };
+          return { ...s, reps: applyKey(s.reps, key) };
+        })
+      );
     },
-    [activeField]
+    [activeSetId, activeField]
   );
 
-  const handleQuickAdjust = (delta: number) => {
-    const current = parseFloat(weight) || 0;
-    setWeight(Math.max(0, current + delta).toString());
+  const handleActivate = (setId: string, field: ActiveField) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveSetId(setId);
+    setActiveField(field);
   };
 
-  const handleSameAsLast = () => {
-    if (lastWeight != null) setWeight(lastWeight.toString());
-    if (lastReps != null) setReps(lastReps.toString());
+  const handleAddSet = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const lastSet = sets[sets.length - 1];
+    const newSet = makeSet(lastSet?.weight ?? "0", lastSet?.reps ?? "8");
+    setSets((prev) => [...prev, newSet]);
+    setActiveSetId(newSet.id);
+    setActiveField("weight");
+  };
+
+  const handleDeleteSet = (setId: string) => {
+    if (sets.length <= 1) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const remaining = sets.filter((s) => s.id !== setId);
+    setSets(remaining);
+    if (activeSetId === setId) {
+      setActiveSetId(remaining[remaining.length - 1]!.id);
+    }
+  };
+
+  const handleQuickFill = (delta: number) => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setSets((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSetId) return s;
+        const cur = parseFloat(s.weight) || 0;
+        return { ...s, weight: Math.max(0, cur + delta).toString() };
+      })
+    );
+  };
+
+  const handleCopyPrev = () => {
+    const idx = sets.findIndex((s) => s.id === activeSetId);
+    if (idx <= 0) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const prev = sets[idx - 1]!;
+    setSets((old) =>
+      old.map((s) =>
+        s.id === activeSetId
+          ? { ...s, weight: prev.weight, reps: prev.reps }
+          : s
+      )
+    );
   };
 
   const handleSave = async () => {
-    if (!selectedExercise) return;
-    const numWeight = parseFloat(weight);
-    const numReps = parseInt(reps);
-    const numSets = parseInt(sets);
+    if (!selectedExercise || sets.length === 0) return;
+    setSaved(true);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    if (isNaN(numSets) || numSets <= 0) return;
-
-    const setsArray: SetEntry[] = Array.from({ length: numSets }, (_, i) => ({
+    const setsData = sets.map((s, i) => ({
       setNumber: i + 1,
-      weight: isNaN(numWeight) ? undefined : numWeight,
-      reps: isNaN(numReps) ? undefined : numReps,
+      weight: parseFloat(s.weight) || undefined,
+      reps: parseInt(s.reps) || undefined,
     }));
 
     await addWorkoutEntry({
@@ -117,14 +166,10 @@ export default function QuickLogScreen() {
       exerciseName: selectedExercise.name,
       muscleGroup: selectedExercise.muscleGroup,
       equipment: selectedExercise.equipment,
-      sets: setsArray,
+      sets: setsData,
     });
 
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSaved(true);
-    setTimeout(() => {
-      router.back();
-    }, 600);
+    setTimeout(() => router.back(), 500);
   };
 
   const filteredExercises = exercises.filter(
@@ -136,38 +181,8 @@ export default function QuickLogScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
-
-  const FieldBtn = ({
-    field,
-    value,
-    label,
-    extra,
-  }: {
-    field: ActiveField;
-    value: string;
-    label: string;
-    extra?: string;
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.fieldBtn,
-        {
-          backgroundColor: activeField === field ? `${colors.primary}15` : colors.card,
-          borderColor: activeField === field ? colors.primary : colors.border,
-        },
-      ]}
-      onPress={() => setActiveField(field)}
-      activeOpacity={0.7}
-    >
-      <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>{label}</Text>
-      <Text style={[styles.fieldValue, { color: activeField === field ? colors.primary : colors.foreground }]}>
-        {value}
-      </Text>
-      {extra && (
-        <Text style={[styles.fieldExtra, { color: colors.mutedForeground }]}>{extra}</Text>
-      )}
-    </TouchableOpacity>
-  );
+  const activeSet = sets.find((s) => s.id === activeSetId);
+  const activeSetIndex = sets.findIndex((s) => s.id === activeSetId);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -177,11 +192,19 @@ export default function QuickLogScreen() {
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>Quick Log</Text>
-          <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-            Update your routine performance
-          </Text>
         </View>
-        <Feather name="search" size={20} color={colors.mutedForeground} />
+        {selectedExercise && (
+          <TouchableOpacity
+            style={[styles.saveHeaderBtn, { backgroundColor: saved ? colors.muted : colors.primary }]}
+            onPress={handleSave}
+            disabled={saved}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.saveHeaderText, { color: colors.primaryForeground }]}>
+              {saved ? "Saved!" : "Save"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -190,12 +213,14 @@ export default function QuickLogScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>EXERCISE</Text>
         <TouchableOpacity
           style={[styles.exerciseRow, { backgroundColor: colors.card, borderColor: colors.border }]}
           onPress={() => setShowPicker(true)}
           activeOpacity={0.7}
         >
+          <View style={[styles.exerciseIcon, { backgroundColor: `${colors.primary}15` }]}>
+            <Feather name="activity" size={18} color={colors.primary} />
+          </View>
           <View style={styles.exerciseInfo}>
             {selectedExercise ? (
               <>
@@ -207,121 +232,205 @@ export default function QuickLogScreen() {
                 </Text>
               </>
             ) : (
-              <Text style={[styles.exercisePlaceholder, { color: colors.mutedForeground }]}>
+              <Text style={[styles.placeholder, { color: colors.mutedForeground }]}>
                 Select an exercise...
               </Text>
             )}
           </View>
-          <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+          <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
         </TouchableOpacity>
+
+        {lastEntry && (
+          <View style={[styles.lastSession, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Feather name="clock" size={12} color={colors.mutedForeground} />
+            <Text style={[styles.lastSessionText, { color: colors.mutedForeground }]}>
+              Last session: {lastEntry.sets.map((s) => `${s.weight ?? "—"}kg × ${s.reps ?? "—"}`).join(", ")}
+            </Text>
+          </View>
+        )}
 
         {selectedExercise && (
           <>
-            <View style={styles.weightSection}>
-              <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>WEIGHT</Text>
-              <TouchableOpacity
-                style={[
-                  styles.weightDisplay,
-                  {
-                    backgroundColor: activeField === "weight" ? `${colors.primary}08` : "transparent",
-                  },
-                ]}
-                onPress={() => setActiveField("weight")}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.weightValue, { color: activeField === "weight" ? colors.primary : colors.foreground }]}>
-                  {weight}
-                </Text>
-                <View style={styles.weightRight}>
-                  <Text style={[styles.weightUnit, { color: colors.mutedForeground }]}>kg</Text>
-                  {lastWeight != null && (
-                    <Text style={[styles.prevText, { color: colors.mutedForeground }]}>
-                      Previous: {lastWeight}kg
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
+            <View style={styles.setsHeader}>
+              <Text style={[styles.setsTitle, { color: colors.foreground }]}>
+                SETS
+              </Text>
+              <Text style={[styles.setsCount, { color: colors.mutedForeground }]}>
+                {sets.length} {sets.length === 1 ? "set" : "sets"}
+              </Text>
             </View>
 
-            <View style={styles.repsRow}>
-              <FieldBtn
-                field="reps"
-                value={reps}
-                label="REPS"
-                extra={lastReps != null ? `Prev: ${lastReps}` : undefined}
-              />
-              <FieldBtn
-                field="sets"
-                value={sets}
-                label="SETS"
-                extra={todayEntry ? `Today: ${todayEntry.sets.length}` : undefined}
-              />
+            <View style={[styles.setsTable, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.tableHead, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.thSet, { color: colors.mutedForeground }]}>SET</Text>
+                <Text style={[styles.thField, { color: colors.mutedForeground }]}>WEIGHT (kg)</Text>
+                <Text style={[styles.thField, { color: colors.mutedForeground }]}>REPS</Text>
+                <View style={styles.thDel} />
+              </View>
+
+              {sets.map((set, index) => {
+                const isActive = set.id === activeSetId;
+                return (
+                  <View
+                    key={set.id}
+                    style={[
+                      styles.tableRow,
+                      index < sets.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                      isActive && { backgroundColor: `${colors.primary}08` },
+                    ]}
+                  >
+                    <View style={styles.setNumBox}>
+                      <Text style={[styles.setNum, { color: isActive ? colors.primary : colors.mutedForeground }]}>
+                        {index + 1}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.cellBtn,
+                        isActive && activeField === "weight" && {
+                          backgroundColor: `${colors.primary}20`,
+                          borderColor: colors.primary,
+                        },
+                        { borderColor: colors.border },
+                      ]}
+                      onPress={() => handleActivate(set.id, "weight")}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.cellValue,
+                          {
+                            color:
+                              isActive && activeField === "weight"
+                                ? colors.primary
+                                : colors.foreground,
+                          },
+                        ]}
+                      >
+                        {set.weight}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.cellBtn,
+                        isActive && activeField === "reps" && {
+                          backgroundColor: `${colors.primary}20`,
+                          borderColor: colors.primary,
+                        },
+                        { borderColor: colors.border },
+                      ]}
+                      onPress={() => handleActivate(set.id, "reps")}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.cellValue,
+                          {
+                            color:
+                              isActive && activeField === "reps"
+                                ? colors.primary
+                                : colors.foreground,
+                          },
+                        ]}
+                      >
+                        {set.reps}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.delBtn}
+                      onPress={() => handleDeleteSet(set.id)}
+                      hitSlop={8}
+                      disabled={sets.length <= 1}
+                    >
+                      <Feather
+                        name="x"
+                        size={14}
+                        color={sets.length <= 1 ? "transparent" : colors.mutedForeground}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+
+              <TouchableOpacity
+                style={[styles.addSetRow, { borderTopColor: colors.border }]}
+                onPress={handleAddSet}
+                activeOpacity={0.7}
+              >
+                <Feather name="plus" size={16} color={colors.primary} />
+                <Text style={[styles.addSetText, { color: colors.primary }]}>
+                  Add Set
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.quickRow}>
-              <TouchableOpacity
-                style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => handleQuickAdjust(2.5)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.quickBtnText, { color: colors.foreground }]}>+2.5kg</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => handleQuickAdjust(5)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.quickBtnText, { color: colors.foreground }]}>+5kg</Text>
-              </TouchableOpacity>
-              {lastWeight != null && (
+              <Text style={[styles.quickLabel, { color: colors.mutedForeground }]}>
+                Quick fill set {activeSetIndex + 1}:
+              </Text>
+              <View style={styles.quickBtns}>
                 <TouchableOpacity
                   style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-                  onPress={handleSameAsLast}
+                  onPress={() => handleQuickFill(2.5)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.quickBtnText, { color: colors.foreground }]}>Same as last</Text>
+                  <Text style={[styles.quickBtnText, { color: colors.foreground }]}>+2.5kg</Text>
                 </TouchableOpacity>
-              )}
+                <TouchableOpacity
+                  style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => handleQuickFill(5)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.quickBtnText, { color: colors.foreground }]}>+5kg</Text>
+                </TouchableOpacity>
+                {activeSetIndex > 0 && (
+                  <TouchableOpacity
+                    style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={handleCopyPrev}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="copy" size={12} color={colors.foreground} />
+                    <Text style={[styles.quickBtnText, { color: colors.foreground }]}>Copy prev</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
-            <NumberPad onPress={handleNumPad} />
+            <View style={styles.numPadSection}>
+              <View style={styles.numPadLabel}>
+                <Text style={[styles.numPadTitle, { color: colors.mutedForeground }]}>
+                  Set {activeSetIndex + 1} · {activeField === "weight" ? "Weight (kg)" : "Reps"}
+                </Text>
+                <Text style={[styles.numPadValue, { color: colors.primary }]}>
+                  {activeField === "weight" ? activeSet?.weight : activeSet?.reps}
+                </Text>
+              </View>
+              <NumberPad onPress={handleNumPad} />
+            </View>
 
             <TouchableOpacity
-              style={[
-                styles.saveBtn,
-                { backgroundColor: saved ? colors.primary : colors.primary },
-              ]}
+              style={[styles.saveBtn, { backgroundColor: saved ? colors.muted : colors.primary }]}
               onPress={handleSave}
               activeOpacity={0.85}
               disabled={saved}
             >
-              <Feather
-                name={saved ? "check-circle" : "check"}
-                size={18}
-                color={colors.primaryForeground}
-              />
+              <Feather name={saved ? "check-circle" : "check"} size={18} color={colors.primaryForeground} />
               <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
-                {saved ? "Saved!" : "Save Workout"}
+                {saved ? "Saved!" : `Save ${sets.length} ${sets.length === 1 ? "Set" : "Sets"}`}
               </Text>
             </TouchableOpacity>
           </>
         )}
 
         {!selectedExercise && (
-          <View style={styles.noExerciseBox}>
+          <View style={styles.emptyBox}>
             <Feather name="activity" size={40} color={colors.mutedForeground} />
-            <Text style={[styles.noExerciseText, { color: colors.mutedForeground }]}>
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               Select an exercise to start logging
             </Text>
-            <TouchableOpacity
-              style={[styles.selectBtn, { backgroundColor: colors.primary }]}
-              onPress={() => setShowPicker(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.selectBtnText, { color: colors.primaryForeground }]}>
-                Browse Exercises
-              </Text>
-            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -364,13 +473,9 @@ export default function QuickLogScreen() {
                   styles.modalItem,
                   {
                     backgroundColor:
-                      selectedExercise?.id === item.id
-                        ? `${colors.primary}12`
-                        : colors.card,
+                      selectedExercise?.id === item.id ? `${colors.primary}12` : colors.card,
                     borderColor:
-                      selectedExercise?.id === item.id
-                        ? colors.primary
-                        : colors.border,
+                      selectedExercise?.id === item.id ? colors.primary : colors.border,
                   },
                 ]}
                 onPress={() => {
@@ -405,119 +510,124 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingBottom: 14,
     borderBottomWidth: 1,
     gap: 12,
   },
-  headerCenter: { flex: 1, gap: 2 },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: "Inter_700Bold",
+  headerCenter: { flex: 1 },
+  headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  saveHeaderBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
   },
-  headerSub: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
+  saveHeaderText: { fontSize: 14, fontFamily: "Inter_700Bold" },
   scroll: { flex: 1 },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    gap: 16,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 1,
-    marginBottom: -8,
-  },
+  content: { paddingHorizontal: 20, paddingTop: 16, gap: 14 },
   exerciseRow: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 12,
     borderWidth: 1,
-    padding: 14,
+    padding: 12,
     gap: 10,
   },
-  exerciseInfo: { flex: 1, gap: 3 },
-  exerciseName: {
-    fontSize: 17,
-    fontFamily: "Inter_700Bold",
+  exerciseIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  exerciseMeta: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-  exercisePlaceholder: {
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-  },
-  weightSection: { gap: 8 },
-  weightDisplay: {
+  exerciseInfo: { flex: 1, gap: 2 },
+  exerciseName: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  exerciseMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  placeholder: { fontSize: 15, fontFamily: "Inter_400Regular" },
+  lastSession: {
     flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    borderRadius: 12,
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
     paddingVertical: 8,
-    paddingHorizontal: 4,
-    gap: 8,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  weightValue: {
-    fontSize: 56,
-    fontFamily: "Inter_700Bold",
-  },
-  weightRight: {
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  weightUnit: {
-    fontSize: 18,
-    fontFamily: "Inter_400Regular",
-  },
-  prevText: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-  repsRow: {
+  lastSessionText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+  setsHeader: {
     flexDirection: "row",
-    gap: 12,
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 4,
   },
-  fieldBtn: {
-    flex: 1,
+  setsTitle: { fontSize: 13, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  setsCount: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  setsTable: {
     borderRadius: 12,
     borderWidth: 1,
-    padding: 14,
-    gap: 4,
+    overflow: "hidden",
   },
-  fieldLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 1,
-  },
-  fieldValue: {
-    fontSize: 32,
-    fontFamily: "Inter_700Bold",
-  },
-  fieldExtra: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
-  quickRow: {
+  tableHead: {
     flexDirection: "row",
-    gap: 8,
-    flexWrap: "wrap",
-  },
-  quickBtn: {
-    paddingHorizontal: 14,
+    alignItems: "center",
+    paddingHorizontal: 12,
     paddingVertical: 8,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  thSet: { width: 32, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
+  thField: { flex: 1, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, textAlign: "center" },
+  thDel: { width: 28 },
+  tableRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  setNumBox: { width: 32, alignItems: "center" },
+  setNum: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  cellBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cellValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  delBtn: { width: 28, alignItems: "center", justifyContent: "center" },
+  addSetRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    gap: 6,
+  },
+  addSetText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  quickRow: { gap: 8 },
+  quickLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  quickBtns: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  quickBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 20,
     borderWidth: 1,
+    gap: 4,
   },
-  quickBtnText: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
+  quickBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  numPadSection: { gap: 10 },
+  numPadLabel: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
+  numPadTitle: { fontSize: 12, fontFamily: "Inter_500Medium" },
+  numPadValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
   saveBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -527,33 +637,10 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
-  saveBtnText: {
-    fontSize: 15,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: 0.5,
-  },
-  noExerciseBox: {
-    alignItems: "center",
-    paddingVertical: 60,
-    gap: 12,
-  },
-  noExerciseText: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-  },
-  selectBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  selectBtnText: {
-    fontSize: 14,
-    fontFamily: "Inter_700Bold",
-  },
-  modal: {
-    flex: 1,
-  },
+  saveBtnText: { fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  emptyBox: { alignItems: "center", paddingVertical: 60, gap: 12 },
+  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
+  modal: { flex: 1 },
   modalHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -563,10 +650,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
-  },
+  modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   modalSearch: {
     flexDirection: "row",
     alignItems: "center",
@@ -577,16 +661,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 8,
   },
-  modalSearchInput: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: "Inter_400Regular",
-  },
-  modalList: {
-    paddingHorizontal: 16,
-    paddingBottom: 40,
-    gap: 8,
-  },
+  modalSearchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  modalList: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
   modalItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -596,12 +672,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   modalItemInfo: { flex: 1, gap: 3 },
-  modalItemName: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-  },
-  modalItemMeta: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
+  modalItemName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  modalItemMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
 });

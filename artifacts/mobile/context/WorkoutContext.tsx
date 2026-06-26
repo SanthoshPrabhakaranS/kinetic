@@ -41,8 +41,12 @@ interface WorkoutContextValue {
   totalVolumeToday: number;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   addExercise: (exercise: Omit<Exercise, "id" | "isCustom">) => Promise<void>;
+  updateExercise: (exerciseId: string, updates: Partial<Omit<Exercise, "id">>) => Promise<void>;
   addWorkoutEntry: (entry: Omit<WorkoutEntry, "id" | "timestamp">) => Promise<void>;
   updateWorkoutEntry: (entryId: string, sets: SetEntry[]) => Promise<void>;
+  deleteWorkoutEntry: (entryId: string) => Promise<void>;
+  getEntryById: (entryId: string) => WorkoutEntry | null;
+  getLogById: (logId: string) => WorkoutLog | null;
   getLastEntryForExercise: (exerciseId: string) => WorkoutEntry | null;
   getBestSetForExercise: (exerciseId: string) => SetEntry | null;
   addRoutine: (routine: Omit<Routine, "id">) => Promise<void>;
@@ -94,12 +98,19 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
 
   const addExercise = useCallback(
     async (exercise: Omit<Exercise, "id" | "isCustom">) => {
-      const newExercise: Exercise = {
-        ...exercise,
-        id: generateId(),
-        isCustom: true,
-      };
+      const newExercise: Exercise = { ...exercise, id: generateId(), isCustom: true };
       const updated = [...exercises, newExercise];
+      setExercises(updated);
+      await AsyncStorage.setItem(KEYS.EXERCISES, JSON.stringify(updated));
+    },
+    [exercises]
+  );
+
+  const updateExercise = useCallback(
+    async (exerciseId: string, updates: Partial<Omit<Exercise, "id">>) => {
+      const updated = exercises.map((ex) =>
+        ex.id === exerciseId ? { ...ex, ...updates } : ex
+      );
       setExercises(updated);
       await AsyncStorage.setItem(KEYS.EXERCISES, JSON.stringify(updated));
     },
@@ -125,12 +136,10 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             : log
         );
       } else {
-        const newLog: WorkoutLog = {
-          id: generateId(),
-          date: today,
-          entries: [newEntry],
-        };
-        updatedLogs = [newLog, ...workoutLogs];
+        updatedLogs = [
+          { id: generateId(), date: today, entries: [newEntry] },
+          ...workoutLogs,
+        ];
       }
 
       setWorkoutLogs(updatedLogs);
@@ -149,6 +158,38 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       }));
       setWorkoutLogs(updatedLogs);
       await AsyncStorage.setItem(KEYS.LOGS, JSON.stringify(updatedLogs));
+    },
+    [workoutLogs]
+  );
+
+  const deleteWorkoutEntry = useCallback(
+    async (entryId: string) => {
+      const updatedLogs = workoutLogs
+        .map((log) => ({
+          ...log,
+          entries: log.entries.filter((e) => e.id !== entryId),
+        }))
+        .filter((log) => log.entries.length > 0);
+      setWorkoutLogs(updatedLogs);
+      await AsyncStorage.setItem(KEYS.LOGS, JSON.stringify(updatedLogs));
+    },
+    [workoutLogs]
+  );
+
+  const getEntryById = useCallback(
+    (entryId: string): WorkoutEntry | null => {
+      for (const log of workoutLogs) {
+        const entry = log.entries.find((e) => e.id === entryId);
+        if (entry) return entry;
+      }
+      return null;
+    },
+    [workoutLogs]
+  );
+
+  const getLogById = useCallback(
+    (logId: string): WorkoutLog | null => {
+      return workoutLogs.find((l) => l.id === logId) ?? null;
     },
     [workoutLogs]
   );
@@ -174,9 +215,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
           if (entry.exerciseId !== exerciseId) continue;
           for (const set of entry.sets) {
             if (!set.weight) continue;
-            if (!bestSet || (bestSet.weight ?? 0) < set.weight) {
-              bestSet = set;
-            }
+            if (!bestSet || (bestSet.weight ?? 0) < set.weight) bestSet = set;
           }
         }
       }
@@ -207,11 +246,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
       const dateStr = d.toISOString().split("T")[0]!;
-      if (workoutLogs.some((l) => l.date === dateStr)) {
-        count++;
-      } else {
-        break;
-      }
+      if (workoutLogs.some((l) => l.date === dateStr)) count++;
+      else break;
     }
     return count;
   }, [workoutLogs]);
@@ -219,12 +255,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const totalVolumeToday = useMemo(() => {
     if (!todayLog) return 0;
     return todayLog.entries.reduce((total, entry) => {
-      const entryVolume = entry.sets.reduce((setTotal, set) => {
-        const weight = set.weight ?? 0;
-        const reps = set.reps ?? 1;
-        return setTotal + weight * reps;
-      }, 0);
-      return total + entryVolume;
+      return (
+        total +
+        entry.sets.reduce(
+          (s, set) => s + (set.weight ?? 0) * (set.reps ?? 1),
+          0
+        )
+      );
     }, 0);
   }, [todayLog]);
 
@@ -240,28 +277,21 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       totalVolumeToday,
       updateProfile,
       addExercise,
+      updateExercise,
       addWorkoutEntry,
       updateWorkoutEntry,
+      deleteWorkoutEntry,
+      getEntryById,
+      getLogById,
       getLastEntryForExercise,
       getBestSetForExercise,
       addRoutine,
     }),
     [
-      loading,
-      profile,
-      exercises,
-      workoutLogs,
-      routines,
-      todayLog,
-      streak,
-      totalVolumeToday,
-      updateProfile,
-      addExercise,
-      addWorkoutEntry,
-      updateWorkoutEntry,
-      getLastEntryForExercise,
-      getBestSetForExercise,
-      addRoutine,
+      loading, profile, exercises, workoutLogs, routines, todayLog, streak,
+      totalVolumeToday, updateProfile, addExercise, updateExercise,
+      addWorkoutEntry, updateWorkoutEntry, deleteWorkoutEntry, getEntryById,
+      getLogById, getLastEntryForExercise, getBestSetForExercise, addRoutine,
     ]
   );
 
