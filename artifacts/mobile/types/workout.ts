@@ -73,3 +73,10 @@ export interface UserProfile {
   selectedRoutineType: RoutineType | null;
   weightUnit: "kg" | "lbs";
 }
+
+export interface WeightEntry {
+  id: string;
+  weight: number;
+  timestamp: string;
+  date: string;
+}

@@ -14,6 +14,7 @@ import type {
   Routine,
   SetEntry,
   UserProfile,
+  WeightEntry,
   WorkoutEntry,
   WorkoutLog,
 } from "@/types/workout";
@@ -23,6 +24,7 @@ const KEYS = {
   EXERCISES: "@kinetic/exercises",
   LOGS: "@kinetic/logs",
   ROUTINES: "@kinetic/routines",
+  WEIGHT: "@kinetic/weight",
 };
 
 const generateId = () =>
@@ -36,9 +38,12 @@ interface WorkoutContextValue {
   exercises: Exercise[];
   workoutLogs: WorkoutLog[];
   routines: Routine[];
+  weightLogs: WeightEntry[];
   todayLog: WorkoutLog | null;
   streak: number;
   totalVolumeToday: number;
+  lastWeight: number | null;
+  weeklyWeightChange: number | null;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   addExercise: (exercise: Omit<Exercise, "id" | "isCustom">) => Promise<void>;
   updateExercise: (exerciseId: string, updates: Partial<Omit<Exercise, "id">>) => Promise<void>;
@@ -50,6 +55,8 @@ interface WorkoutContextValue {
   getLastEntryForExercise: (exerciseId: string) => WorkoutEntry | null;
   getBestSetForExercise: (exerciseId: string) => SetEntry | null;
   addRoutine: (routine: Omit<Routine, "id">) => Promise<void>;
+  addWeightEntry: (weight: number) => Promise<void>;
+  deleteWeightEntry: (id: string) => Promise<void>;
 }
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
@@ -65,22 +72,25 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [exercises, setExercises] = useState<Exercise[]>(DEFAULT_EXERCISES);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
+  const [weightLogs, setWeightLogs] = useState<WeightEntry[]>([]);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [profileRaw, exercisesRaw, logsRaw, routinesRaw] =
+        const [profileRaw, exercisesRaw, logsRaw, routinesRaw, weightRaw] =
           await Promise.all([
             AsyncStorage.getItem(KEYS.PROFILE),
             AsyncStorage.getItem(KEYS.EXERCISES),
             AsyncStorage.getItem(KEYS.LOGS),
             AsyncStorage.getItem(KEYS.ROUTINES),
+            AsyncStorage.getItem(KEYS.WEIGHT),
           ]);
 
         if (profileRaw) setProfile(JSON.parse(profileRaw) as UserProfile);
         if (exercisesRaw) setExercises(JSON.parse(exercisesRaw) as Exercise[]);
         if (logsRaw) setWorkoutLogs(JSON.parse(logsRaw) as WorkoutLog[]);
         if (routinesRaw) setRoutines(JSON.parse(routinesRaw) as Routine[]);
+        if (weightRaw) setWeightLogs(JSON.parse(weightRaw) as WeightEntry[]);
       } catch (e) {
         console.error("Failed to load workout data", e);
       } finally {
@@ -188,9 +198,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   );
 
   const getLogById = useCallback(
-    (logId: string): WorkoutLog | null => {
-      return workoutLogs.find((l) => l.id === logId) ?? null;
-    },
+    (logId: string): WorkoutLog | null =>
+      workoutLogs.find((l) => l.id === logId) ?? null,
     [workoutLogs]
   );
 
@@ -234,6 +243,31 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     [routines]
   );
 
+  const addWeightEntry = useCallback(
+    async (weight: number) => {
+      const now = new Date();
+      const newEntry: WeightEntry = {
+        id: generateId(),
+        weight,
+        timestamp: now.toISOString(),
+        date: now.toISOString().split("T")[0]!,
+      };
+      const updated = [newEntry, ...weightLogs];
+      setWeightLogs(updated);
+      await AsyncStorage.setItem(KEYS.WEIGHT, JSON.stringify(updated));
+    },
+    [weightLogs]
+  );
+
+  const deleteWeightEntry = useCallback(
+    async (id: string) => {
+      const updated = weightLogs.filter((e) => e.id !== id);
+      setWeightLogs(updated);
+      await AsyncStorage.setItem(KEYS.WEIGHT, JSON.stringify(updated));
+    },
+    [weightLogs]
+  );
+
   const todayLog = useMemo(() => {
     const today = getTodayDate();
     return workoutLogs.find((l) => l.date === today) ?? null;
@@ -254,44 +288,50 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
 
   const totalVolumeToday = useMemo(() => {
     if (!todayLog) return 0;
-    return todayLog.entries.reduce((total, entry) => {
-      return (
+    return todayLog.entries.reduce(
+      (total, entry) =>
         total +
         entry.sets.reduce(
           (s, set) => s + (set.weight ?? 0) * (set.reps ?? 1),
           0
-        )
-      );
-    }, 0);
+        ),
+      0
+    );
   }, [todayLog]);
+
+  const lastWeight = useMemo(
+    () => (weightLogs.length > 0 ? weightLogs[0]!.weight : null),
+    [weightLogs]
+  );
+
+  const weeklyWeightChange = useMemo(() => {
+    if (weightLogs.length < 2) return null;
+    const latest = weightLogs[0]!;
+    const sevenDaysAgo = new Date(latest.timestamp);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const baseline = weightLogs.find(
+      (e) => new Date(e.timestamp) <= sevenDaysAgo
+    );
+    if (!baseline) return null;
+    return Math.round((latest.weight - baseline.weight) * 10) / 10;
+  }, [weightLogs]);
 
   const value = useMemo<WorkoutContextValue>(
     () => ({
-      loading,
-      profile,
-      exercises,
-      workoutLogs,
-      routines,
-      todayLog,
-      streak,
-      totalVolumeToday,
-      updateProfile,
-      addExercise,
-      updateExercise,
-      addWorkoutEntry,
-      updateWorkoutEntry,
-      deleteWorkoutEntry,
-      getEntryById,
-      getLogById,
-      getLastEntryForExercise,
-      getBestSetForExercise,
-      addRoutine,
+      loading, profile, exercises, workoutLogs, routines, weightLogs,
+      todayLog, streak, totalVolumeToday, lastWeight, weeklyWeightChange,
+      updateProfile, addExercise, updateExercise, addWorkoutEntry,
+      updateWorkoutEntry, deleteWorkoutEntry, getEntryById, getLogById,
+      getLastEntryForExercise, getBestSetForExercise, addRoutine,
+      addWeightEntry, deleteWeightEntry,
     }),
     [
-      loading, profile, exercises, workoutLogs, routines, todayLog, streak,
-      totalVolumeToday, updateProfile, addExercise, updateExercise,
-      addWorkoutEntry, updateWorkoutEntry, deleteWorkoutEntry, getEntryById,
-      getLogById, getLastEntryForExercise, getBestSetForExercise, addRoutine,
+      loading, profile, exercises, workoutLogs, routines, weightLogs,
+      todayLog, streak, totalVolumeToday, lastWeight, weeklyWeightChange,
+      updateProfile, addExercise, updateExercise, addWorkoutEntry,
+      updateWorkoutEntry, deleteWorkoutEntry, getEntryById, getLogById,
+      getLastEntryForExercise, getBestSetForExercise, addRoutine,
+      addWeightEntry, deleteWeightEntry,
     ]
   );
 
