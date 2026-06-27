@@ -57,7 +57,7 @@
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@supabase/supabase-js": "^2.108.2",
     "expo-dev-client": "~6.0.21",
-    "react-native-vector-icons": "^10.3.0"
+    "react-native-vector-icons": "^10.3.0",
     "prettier": "^3.8.4",
     "typescript": "~5.9.3"
   }
