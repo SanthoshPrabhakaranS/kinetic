@@ -263,10 +263,10 @@ export default function CreateRoutineScreen() {
           </View>
           <FlatList
             data={filteredExercises}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item: Exercise) => item.id}
             contentContainerStyle={styles.modalList}
             showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => {
+            renderItem={({ item }: { item: Exercise }) => {
               const added = selectedExercises.some(
                 (r) => r.exerciseId === item.id,
               );

@@ -5,6 +5,7 @@ import React, { useMemo, useState } from "react";
 import {
   FlatList,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,17 +19,35 @@ import { useColors } from "@/hooks/useColors";
 import type { Exercise, MuscleGroup } from "@/types/workout";
 
 const MUSCLE_FILTERS: (MuscleGroup | "All")[] = [
-  "All", "CHEST", "BACK", "LEGS", "SHOULDERS", "ARMS", "CORE",
+  "All",
+  "CHEST",
+  "BACK",
+  "LEGS",
+  "SHOULDERS",
+  "ARMS",
+  "CORE",
 ];
 
 const LABEL: Record<string, string> = {
-  All: "All", CHEST: "Chest", BACK: "Back", LEGS: "Legs",
-  SHOULDERS: "Shoulders", ARMS: "Arms", CORE: "Core", GLUTES: "Glutes",
+  All: "All",
+  CHEST: "Chest",
+  BACK: "Back",
+  LEGS: "Legs",
+  SHOULDERS: "Shoulders",
+  ARMS: "Arms",
+  CORE: "Core",
+  GLUTES: "Glutes",
 };
 
 const MUSCLE_COLORS: Record<string, string> = {
-  CHEST: "#FF6B6B", BACK: "#4ECDC4", LEGS: "#45B7D1", SHOULDERS: "#96CEB4",
-  ARMS: "#FFEAA7", CORE: "#DDA0DD", GLUTES: "#F0A500", CARDIO: "#FF8C69",
+  CHEST: "#FF6B6B",
+  BACK: "#4ECDC4",
+  LEGS: "#45B7D1",
+  SHOULDERS: "#96CEB4",
+  ARMS: "#FFEAA7",
+  CORE: "#DDA0DD",
+  GLUTES: "#F0A500",
+  CARDIO: "#FF8C69",
 };
 
 function ExerciseRow({
@@ -47,7 +66,10 @@ function ExerciseRow({
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
       onPress={onLog}
       activeOpacity={0.7}
     >
@@ -57,11 +79,19 @@ function ExerciseRow({
 
       <View style={styles.info}>
         <View style={styles.nameRow}>
-          <Text style={[styles.name, { color: colors.foreground }]} numberOfLines={1}>
+          <Text
+            style={[styles.name, { color: colors.foreground }]}
+            numberOfLines={1}
+          >
             {exercise.name}
           </Text>
           {exercise.isCustom && (
-            <View style={[styles.customBadge, { backgroundColor: `${colors.primary}20` }]}>
+            <View
+              style={[
+                styles.customBadge,
+                { backgroundColor: `${colors.primary}20` },
+              ]}
+            >
               <Text style={[styles.customBadgeText, { color: colors.primary }]}>
                 Custom
               </Text>
@@ -75,7 +105,9 @@ function ExerciseRow({
 
       {bestWeight != null && (
         <View style={styles.bestBox}>
-          <Text style={[styles.bestLabel, { color: colors.mutedForeground }]}>BEST</Text>
+          <Text style={[styles.bestLabel, { color: colors.mutedForeground }]}>
+            BEST
+          </Text>
           <Text style={[styles.bestWeight, { color: colors.primary }]}>
             {bestWeight}kg
           </Text>
@@ -83,7 +115,10 @@ function ExerciseRow({
       )}
 
       <TouchableOpacity
-        style={[styles.editBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
+        style={[
+          styles.editBtn,
+          { backgroundColor: colors.muted, borderColor: colors.border },
+        ]}
         onPress={(e) => {
           e.stopPropagation();
           onEdit();
@@ -122,11 +157,18 @@ export default function LibraryScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: topPad + 12, backgroundColor: colors.background },
+        ]}
+      >
         <View style={styles.titleRow}>
           <View style={styles.logoRow}>
             <Feather name="zap" size={16} color={colors.primary} />
-            <Text style={[styles.appName, { color: colors.primary }]}>KINETIC</Text>
+            <Text style={[styles.appName, { color: colors.primary }]}>
+              KINETIC
+            </Text>
           </View>
           <TouchableOpacity
             style={[styles.addBtn, { backgroundColor: colors.primary }]}
@@ -140,7 +182,12 @@ export default function LibraryScreen() {
           </TouchableOpacity>
         </View>
 
-        <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.searchBar,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <Feather name="search" size={16} color={colors.mutedForeground} />
           <TextInput
             style={[styles.searchInput, { color: colors.foreground }]}
@@ -168,8 +215,10 @@ export default function LibraryScreen() {
               style={[
                 styles.filterChip,
                 {
-                  backgroundColor: activeFilter === item ? colors.primary : colors.card,
-                  borderColor: activeFilter === item ? colors.primary : colors.border,
+                  backgroundColor:
+                    activeFilter === item ? colors.primary : colors.card,
+                  borderColor:
+                    activeFilter === item ? colors.primary : colors.border,
                 },
               ]}
               onPress={() => {
@@ -182,7 +231,10 @@ export default function LibraryScreen() {
                 style={[
                   styles.filterLabel,
                   {
-                    color: activeFilter === item ? colors.primaryForeground : colors.mutedForeground,
+                    color:
+                      activeFilter === item
+                        ? colors.primaryForeground
+                        : colors.mutedForeground,
                   },
                 ]}
               >
@@ -218,11 +270,17 @@ export default function LibraryScreen() {
               exercise={item}
               bestWeight={best?.weight}
               onLog={() => {
-                router.push({ pathname: "/quick-log", params: { exerciseId: item.id } });
+                router.push({
+                  pathname: "/quick-log",
+                  params: { exerciseId: item.id },
+                });
               }}
               onEdit={() => {
                 void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push({ pathname: "/edit-exercise", params: { exerciseId: item.id } });
+                router.push({
+                  pathname: "/edit-exercise",
+                  params: { exerciseId: item.id },
+                });
               }}
             />
           );
@@ -243,8 +301,11 @@ const styles = StyleSheet.create({
   logoRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   appName: { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: 2 },
   addBtn: {
-    width: 36, height: 36, borderRadius: 10,
-    alignItems: "center", justifyContent: "center",
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
   },
   searchBar: {
     flexDirection: "row",
@@ -305,7 +366,11 @@ const styles = StyleSheet.create({
   customBadgeText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   meta: { fontSize: 12, fontFamily: "Inter_400Regular" },
   bestBox: { alignItems: "flex-end", marginRight: 2 },
-  bestLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
+  bestLabel: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+  },
   bestWeight: { fontSize: 13, fontFamily: "Inter_700Bold" },
   editBtn: {
     width: 30,

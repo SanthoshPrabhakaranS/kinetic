@@ -638,10 +638,10 @@ export default function QuickLogScreen() {
           </View>
           <FlatList
             data={filteredExercises}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item: Exercise) => item.id}
             contentContainerStyle={styles.modalList}
             showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
+            renderItem={({ item }: { item: Exercise }) => (
               <TouchableOpacity
                 style={[
                   styles.modalItem,

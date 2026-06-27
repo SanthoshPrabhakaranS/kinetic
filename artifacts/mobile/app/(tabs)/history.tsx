@@ -2,8 +2,8 @@ import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React from "react";
 import {
-  FlatList,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -135,7 +135,7 @@ export default function HistoryScreen() {
   const colors = useColors();
   const { workoutLogs } = useWorkout();
 
-  const sortedLogs = [...workoutLogs].sort((a, b) =>
+  const sortedLogs: WorkoutLog[] = [...workoutLogs].sort((a, b) =>
     b.date.localeCompare(a.date),
   );
 
@@ -144,26 +144,23 @@ export default function HistoryScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <FlatList
-        data={sortedLogs}
-        keyExtractor={(item) => item.id}
+      <ScrollView
         contentContainerStyle={[
           styles.list,
           { paddingTop: topPad + 12, paddingBottom: botPad + 80 },
         ]}
         showsVerticalScrollIndicator={false}
-        scrollEnabled={!!sortedLogs.length}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.foreground }]}>
-              History
-            </Text>
-            <Text style={[styles.count, { color: colors.mutedForeground }]}>
-              {workoutLogs.length} sessions total · tap to view details
-            </Text>
-          </View>
-        }
-        ListEmptyComponent={
+      >
+        <View style={styles.header}>
+          <Text style={[styles.title, { color: colors.foreground }]}>
+            History
+          </Text>
+          <Text style={[styles.count, { color: colors.mutedForeground }]}>
+            {workoutLogs.length} sessions total · tap to view details
+          </Text>
+        </View>
+
+        {sortedLogs.length === 0 ? (
           <View style={styles.emptyBox}>
             <Feather name="clock" size={48} color={colors.mutedForeground} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
@@ -173,9 +170,10 @@ export default function HistoryScreen() {
               Your completed workouts will appear here
             </Text>
           </View>
-        }
-        renderItem={({ item }) => <WorkoutLogCard log={item} />}
-      />
+        ) : (
+          sortedLogs.map((log) => <WorkoutLogCard key={log.id} log={log} />)
+        )}
+      </ScrollView>
     </View>
   );
 }

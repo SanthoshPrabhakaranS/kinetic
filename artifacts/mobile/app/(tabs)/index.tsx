@@ -10,8 +10,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
+  TouchableOpacity,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -253,16 +253,16 @@ export default function HomeScreen() {
     [selectedDate],
   );
   const selectedLog = useMemo(
-    () => workoutLogs.find((log) => log.date === selectedDateKey) ?? null,
+    () => workoutLogs.find((log: any) => log.date === selectedDateKey) ?? null,
     [selectedDateKey, workoutLogs],
   );
   const selectedVolume = useMemo(() => {
     if (!selectedLog) return 0;
     return selectedLog.entries.reduce(
-      (total, entry) =>
+      (total: any, entry: any) =>
         total +
         entry.sets.reduce(
-          (sum, set) => sum + (set.weight ?? 0) * (set.reps ?? 1),
+          (sum: any, set: any) => sum + (set.weight ?? 0) * (set.reps ?? 1),
           0,
         ),
       0,
@@ -467,7 +467,7 @@ export default function HomeScreen() {
           </View>
         ) : (
           <View style={[styles.summaryList, { borderColor: colors.border }]}>
-            {selectedLog.entries.slice(0, 5).map((entry) => (
+            {selectedLog.entries.slice(0, 5).map((entry: any) => (
               <LogEntryCard
                 key={entry.id}
                 entry={entry}

@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "sync-mobile-source",
+			"type": "shell",
+			"command": "powershell -NoProfile -Command \"$root = 'C:\\Users\\user\\Downloads\\Gym-Log-Master'; $mobile = Join-Path $root 'artifacts\\mobile'; $dirs = @('app','assets','components','constants','context','data','hooks','server','types'); $files = @('app.json','babel.config.js','eas.json','expo-env.d.ts','metro.config.js','package.json','tsconfig.json','tsconfig.base.json'); foreach ($dir in $dirs) { $src = Join-Path $root $dir; $dst = Join-Path $mobile $dir; if (Test-Path $src) { if (-not (Test-Path $dst)) { New-Item -ItemType Directory -Path $dst -Force | Out-Null }; robocopy $src $dst /E /NFL /NDL /NJH /NJS /nc /ns /np | Out-Null } }; foreach ($file in $files) { $src = Join-Path $root $file; $dst = Join-Path $mobile $file; if (Test-Path $src) { Copy-Item $src $dst -Force } }; foreach ($dir in $dirs) { $path = Join-Path $root $dir; if (Test-Path $path) { Remove-Item $path -Recurse -Force } }; foreach ($file in $files) { $path = Join-Path $root $file; if (Test-Path $path) { Remove-Item $path -Force } }; Write-Host 'sync-complete'\"",
+			"isBackground": false,
+			"problemMatcher": []
+		},
+		{
+			"label": "sync-mobile-source-script",
+			"type": "shell",
+			"command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sync-mobile-canonical.ps1",
+			"isBackground": false,
+			"problemMatcher": []
+		}
+	]
+}
