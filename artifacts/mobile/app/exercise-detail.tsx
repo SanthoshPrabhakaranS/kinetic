@@ -35,15 +35,42 @@ function applyKey(current: string, key: string): string {
 export default function ExerciseDetailScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { entryId } = useLocalSearchParams<{ entryId: string }>();
+  const { entryId, selectedDate } = useLocalSearchParams<{
+    entryId?: string | string[];
+    selectedDate?: string | string[];
+  }>();
   const { getEntryById, updateWorkoutEntry, deleteWorkoutEntry } = useWorkout();
 
-  const entry = getEntryById(entryId);
+  const resolvedEntryId = Array.isArray(entryId)
+    ? (entryId[0] ?? "")
+    : (entryId ?? "");
+  const resolvedSelectedDate = Array.isArray(selectedDate)
+    ? (selectedDate[0] ?? "")
+    : (selectedDate ?? "");
+
+  const entry = getEntryById(resolvedEntryId);
 
   const [editableSets, setEditableSets] = useState<EditableSet[]>([]);
   const [activeSetId, setActiveSetId] = useState<string>("");
   const [activeField, setActiveField] = useState<ActiveField>("weight");
   const [hasChanges, setHasChanges] = useState(false);
+
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    if (resolvedSelectedDate.trim()) {
+      router.replace({
+        pathname: "/(tabs)/log",
+        params: { selectedDate: resolvedSelectedDate },
+      });
+      return;
+    }
+
+    router.replace("/(tabs)");
+  };
 
   useEffect(() => {
     if (entry) {
@@ -56,7 +83,7 @@ export default function ExerciseDetailScreen() {
       setEditableSets(mapped);
       if (mapped.length > 0) setActiveSetId(mapped[0]!._id);
     }
-  }, [entryId]);
+  }, [resolvedEntryId]);
 
   if (!entry) {
     return (
@@ -64,8 +91,10 @@ export default function ExerciseDetailScreen() {
         <Text style={[styles.notFound, { color: colors.mutedForeground }]}>
           Entry not found
         </Text>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.backLink, { color: colors.primary }]}>Go back</Text>
+        <TouchableOpacity onPress={handleGoBack}>
+          <Text style={[styles.backLink, { color: colors.primary }]}>
+            Go back
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -86,7 +115,7 @@ export default function ExerciseDetailScreen() {
         if (activeField === "weight")
           return { ...s, weight: parseFloat(next) || 0 };
         return { ...s, reps: parseInt(next) || 0 };
-      })
+      }),
     );
   };
 
@@ -128,9 +157,9 @@ export default function ExerciseDetailScreen() {
       weight: s.weight,
       reps: s.reps,
     }));
-    await updateWorkoutEntry(entryId, sets);
+    await updateWorkoutEntry(resolvedEntryId, sets);
     setHasChanges(false);
-    router.back();
+    handleGoBack();
   };
 
   const handleDelete = () => {
@@ -143,12 +172,14 @@ export default function ExerciseDetailScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            await deleteWorkoutEntry(entryId);
-            router.back();
+            void Haptics.notificationAsync(
+              Haptics.NotificationFeedbackType.Warning,
+            );
+            await deleteWorkoutEntry(resolvedEntryId);
+            handleGoBack();
           },
         },
-      ]
+      ],
     );
   };
 
@@ -159,20 +190,25 @@ export default function ExerciseDetailScreen() {
 
   const totalVolume = editableSets.reduce(
     (t, s) => t + (s.weight ?? 0) * (s.reps ?? 1),
-    0
+    0,
   );
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
+        <TouchableOpacity onPress={handleGoBack} hitSlop={12}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={[styles.exerciseName, { color: colors.foreground }]} numberOfLines={1}>
+          <Text
+            style={[styles.exerciseName, { color: colors.foreground }]}
+            numberOfLines={1}
+          >
             {entry.exerciseName}
           </Text>
-          <Text style={[styles.exerciseMeta, { color: colors.mutedForeground }]}>
+          <Text
+            style={[styles.exerciseMeta, { color: colors.mutedForeground }]}
+          >
             {entry.muscleGroup} · {entry.equipment}
           </Text>
         </View>
@@ -187,29 +223,65 @@ export default function ExerciseDetailScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.statsRow}>
-          <View style={[styles.statChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>{editableSets.length}</Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Sets</Text>
+          <View
+            style={[
+              styles.statChip,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.statValue, { color: colors.primary }]}>
+              {editableSets.length}
+            </Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+              Sets
+            </Text>
           </View>
-          <View style={[styles.statChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.statChip,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Text style={[styles.statValue, { color: colors.primary }]}>
               {Math.round(totalVolume)}
             </Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>kg Vol.</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+              kg Vol.
+            </Text>
           </View>
-          <View style={[styles.statChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.statChip,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Text style={[styles.statValue, { color: colors.primary }]}>
               {editableSets.reduce((m, s) => Math.max(m, s.weight ?? 0), 0)}
             </Text>
-            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>kg Best</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+              kg Best
+            </Text>
           </View>
         </View>
 
-        <View style={[styles.setsTable, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={[styles.tableHead, { borderBottomColor: colors.border }]}>
-            <Text style={[styles.thSet, { color: colors.mutedForeground }]}>SET</Text>
-            <Text style={[styles.thField, { color: colors.mutedForeground }]}>WEIGHT (kg)</Text>
-            <Text style={[styles.thField, { color: colors.mutedForeground }]}>REPS</Text>
+        <View
+          style={[
+            styles.setsTable,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <View
+            style={[styles.tableHead, { borderBottomColor: colors.border }]}
+          >
+            <Text style={[styles.thSet, { color: colors.mutedForeground }]}>
+              SET
+            </Text>
+            <Text style={[styles.thField, { color: colors.mutedForeground }]}>
+              WEIGHT (kg)
+            </Text>
+            <Text style={[styles.thField, { color: colors.mutedForeground }]}>
+              REPS
+            </Text>
             <View style={styles.thDel} />
           </View>
 
@@ -228,7 +300,16 @@ export default function ExerciseDetailScreen() {
                 ]}
               >
                 <View style={styles.setNumBox}>
-                  <Text style={[styles.setNum, { color: isActive ? colors.primary : colors.mutedForeground }]}>
+                  <Text
+                    style={[
+                      styles.setNum,
+                      {
+                        color: isActive
+                          ? colors.primary
+                          : colors.mutedForeground,
+                      },
+                    ]}
+                  >
                     {index + 1}
                   </Text>
                 </View>
@@ -236,13 +317,31 @@ export default function ExerciseDetailScreen() {
                 <TouchableOpacity
                   style={[
                     styles.cellBtn,
-                    { borderColor: isActive && activeField === "weight" ? colors.primary : colors.border },
-                    isActive && activeField === "weight" && { backgroundColor: `${colors.primary}20` },
+                    {
+                      borderColor:
+                        isActive && activeField === "weight"
+                          ? colors.primary
+                          : colors.border,
+                    },
+                    isActive &&
+                      activeField === "weight" && {
+                        backgroundColor: `${colors.primary}20`,
+                      },
                   ]}
                   onPress={() => handleActivate(set._id, "weight")}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.cellValue, { color: isActive && activeField === "weight" ? colors.primary : colors.foreground }]}>
+                  <Text
+                    style={[
+                      styles.cellValue,
+                      {
+                        color:
+                          isActive && activeField === "weight"
+                            ? colors.primary
+                            : colors.foreground,
+                      },
+                    ]}
+                  >
                     {set.weight ?? 0}
                   </Text>
                 </TouchableOpacity>
@@ -250,13 +349,31 @@ export default function ExerciseDetailScreen() {
                 <TouchableOpacity
                   style={[
                     styles.cellBtn,
-                    { borderColor: isActive && activeField === "reps" ? colors.primary : colors.border },
-                    isActive && activeField === "reps" && { backgroundColor: `${colors.primary}20` },
+                    {
+                      borderColor:
+                        isActive && activeField === "reps"
+                          ? colors.primary
+                          : colors.border,
+                    },
+                    isActive &&
+                      activeField === "reps" && {
+                        backgroundColor: `${colors.primary}20`,
+                      },
                   ]}
                   onPress={() => handleActivate(set._id, "reps")}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.cellValue, { color: isActive && activeField === "reps" ? colors.primary : colors.foreground }]}>
+                  <Text
+                    style={[
+                      styles.cellValue,
+                      {
+                        color:
+                          isActive && activeField === "reps"
+                            ? colors.primary
+                            : colors.foreground,
+                      },
+                    ]}
+                  >
                     {set.reps ?? 0}
                   </Text>
                 </TouchableOpacity>
@@ -270,7 +387,11 @@ export default function ExerciseDetailScreen() {
                   <Feather
                     name="x"
                     size={14}
-                    color={editableSets.length <= 1 ? "transparent" : colors.mutedForeground}
+                    color={
+                      editableSets.length <= 1
+                        ? "transparent"
+                        : colors.mutedForeground
+                    }
                   />
                 </TouchableOpacity>
               </View>
@@ -283,17 +404,24 @@ export default function ExerciseDetailScreen() {
             activeOpacity={0.7}
           >
             <Feather name="plus" size={16} color={colors.primary} />
-            <Text style={[styles.addSetText, { color: colors.primary }]}>Add Set</Text>
+            <Text style={[styles.addSetText, { color: colors.primary }]}>
+              Add Set
+            </Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.numPadSection}>
           <View style={styles.numPadHeader}>
-            <Text style={[styles.numPadLabel, { color: colors.mutedForeground }]}>
-              Set {activeSetIndex + 1} · {activeField === "weight" ? "Weight (kg)" : "Reps"}
+            <Text
+              style={[styles.numPadLabel, { color: colors.mutedForeground }]}
+            >
+              Set {activeSetIndex + 1} ·{" "}
+              {activeField === "weight" ? "Weight (kg)" : "Reps"}
             </Text>
             <Text style={[styles.numPadValue, { color: colors.primary }]}>
-              {activeField === "weight" ? (activeSet?.weight ?? 0) : (activeSet?.reps ?? 0)}
+              {activeField === "weight"
+                ? (activeSet?.weight ?? 0)
+                : (activeSet?.reps ?? 0)}
             </Text>
           </View>
           <NumberPad onPress={handleNumPad} />
@@ -302,14 +430,20 @@ export default function ExerciseDetailScreen() {
         <TouchableOpacity
           style={[
             styles.saveBtn,
-            { backgroundColor: hasChanges ? colors.primary : `${colors.primary}50` },
+            {
+              backgroundColor: hasChanges
+                ? colors.primary
+                : `${colors.primary}50`,
+            },
           ]}
           onPress={handleSave}
           activeOpacity={0.85}
           disabled={!hasChanges}
         >
           <Feather name="check" size={18} color={colors.primaryForeground} />
-          <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
+          <Text
+            style={[styles.saveBtnText, { color: colors.primaryForeground }]}
+          >
             Save Changes
           </Text>
         </TouchableOpacity>
@@ -327,8 +461,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingTop: 35,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     gap: 12,
   },
@@ -356,8 +490,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 8,
   },
-  thSet: { width: 32, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
-  thField: { flex: 1, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, textAlign: "center" },
+  thSet: {
+    width: 32,
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+  },
+  thField: {
+    flex: 1,
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+    textAlign: "center",
+  },
   thDel: { width: 28 },
   tableRow: {
     flexDirection: "row",

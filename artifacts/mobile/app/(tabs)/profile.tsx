@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { Redirect } from "expo-router";
 import React from "react";
 import {
   Platform,
@@ -12,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
@@ -39,11 +41,15 @@ function SettingsRow({
       activeOpacity={onPress ? 0.6 : 1}
       disabled={!onPress}
     >
-      <View style={[styles.rowIcon, { backgroundColor: `${colors.primary}18` }]}>
+      <View
+        style={[styles.rowIcon, { backgroundColor: `${colors.primary}18` }]}
+      >
         <Feather name={icon as any} size={16} color={colors.primary} />
       </View>
       <View style={styles.rowText}>
-        <Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text>
+        <Text style={[styles.rowLabel, { color: colors.foreground }]}>
+          {label}
+        </Text>
         {sublabel && (
           <Text style={[styles.rowSub, { color: colors.mutedForeground }]}>
             {sublabel}
@@ -52,7 +58,11 @@ function SettingsRow({
       </View>
       {right}
       {showChevron && !right && (
-        <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+        <Feather
+          name="chevron-right"
+          size={16}
+          color={colors.mutedForeground}
+        />
       )}
     </TouchableOpacity>
   );
@@ -70,8 +80,10 @@ function SectionHeader({ title }: { title: string }) {
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
+  const { signOut, session } = useAuth();
   const { theme, isDark, toggleTheme, setTheme } = useTheme();
-  const { profile, updateProfile, workoutLogs, streak, weightLogs } = useWorkout();
+  const { profile, updateProfile, workoutLogs, streak, weightLogs } =
+    useWorkout();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -86,18 +98,24 @@ export default function ProfileScreen() {
 
   const totalSets = workoutLogs.reduce(
     (t, l) => t + l.entries.reduce((e, en) => e + en.sets.length, 0),
-    0
+    0,
   );
 
   const handleToggleUnit = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await updateProfile({ weightUnit: profile.weightUnit === "kg" ? "lbs" : "kg" });
+    await updateProfile({
+      weightUnit: profile.weightUnit === "kg" ? "lbs" : "kg",
+    });
   };
 
   const handleThemeToggle = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await toggleTheme();
   };
+
+  if (!session) {
+    return <Redirect href="/onboarding" />;
+  }
 
   return (
     <ScrollView
@@ -110,9 +128,16 @@ export default function ProfileScreen() {
     >
       <Text style={[styles.title, { color: colors.foreground }]}>Profile</Text>
 
-      <View style={[styles.avatarCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.avatarCard,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
         <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-          <Text style={[styles.avatarText, { color: colors.primaryForeground }]}>
+          <Text
+            style={[styles.avatarText, { color: colors.primaryForeground }]}
+          >
             {initials}
           </Text>
         </View>
@@ -127,7 +152,12 @@ export default function ProfileScreen() {
       </View>
 
       <View style={[styles.statsRow]}>
-        <View style={[styles.statBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.statBox,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <Text style={[styles.statValue, { color: colors.primary }]}>
             {workoutLogs.length}
           </Text>
@@ -135,7 +165,12 @@ export default function ProfileScreen() {
             Workouts
           </Text>
         </View>
-        <View style={[styles.statBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.statBox,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <Text style={[styles.statValue, { color: colors.primary }]}>
             {streak}
           </Text>
@@ -143,7 +178,12 @@ export default function ProfileScreen() {
             Day Streak
           </Text>
         </View>
-        <View style={[styles.statBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.statBox,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <Text style={[styles.statValue, { color: colors.primary }]}>
             {totalSets}
           </Text>
@@ -154,7 +194,12 @@ export default function ProfileScreen() {
       </View>
 
       <SectionHeader title="APPEARANCE" />
-      <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.section,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
         <SettingsRow
           icon="moon"
           label="Dark Mode"
@@ -169,7 +214,7 @@ export default function ProfileScreen() {
             />
           }
         />
-        <View style={[styles.themeToggleRow, { borderBottomColor: colors.border }]}>
+        {/* <View style={[styles.themeToggleRow, { borderBottomColor: colors.border }]}>
           <View style={[styles.rowIcon, { backgroundColor: `${colors.primary}18` }]}>
             <Feather name="sun" size={16} color={colors.primary} />
           </View>
@@ -228,21 +273,33 @@ export default function ProfileScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </View> */}
       </View>
 
       <SectionHeader title="UNITS" />
-      <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.section,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
         <SettingsRow
           icon="activity"
           label="Weight Unit"
           sublabel={`Currently showing ${profile.weightUnit}`}
           right={
-            <View style={[styles.segmented, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+            <View
+              style={[
+                styles.segmented,
+                { backgroundColor: colors.muted, borderColor: colors.border },
+              ]}
+            >
               <TouchableOpacity
                 style={[
                   styles.segment,
-                  profile.weightUnit === "kg" && { backgroundColor: colors.primary },
+                  profile.weightUnit === "kg" && {
+                    backgroundColor: colors.primary,
+                  },
                 ]}
                 onPress={async () => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -254,9 +311,10 @@ export default function ProfileScreen() {
                   style={[
                     styles.segmentText,
                     {
-                      color: profile.weightUnit === "kg"
-                        ? colors.primaryForeground
-                        : colors.mutedForeground,
+                      color:
+                        profile.weightUnit === "kg"
+                          ? colors.primaryForeground
+                          : colors.mutedForeground,
                     },
                   ]}
                 >
@@ -266,7 +324,9 @@ export default function ProfileScreen() {
               <TouchableOpacity
                 style={[
                   styles.segment,
-                  profile.weightUnit === "lbs" && { backgroundColor: colors.primary },
+                  profile.weightUnit === "lbs" && {
+                    backgroundColor: colors.primary,
+                  },
                 ]}
                 onPress={async () => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -278,9 +338,10 @@ export default function ProfileScreen() {
                   style={[
                     styles.segmentText,
                     {
-                      color: profile.weightUnit === "lbs"
-                        ? colors.primaryForeground
-                        : colors.mutedForeground,
+                      color:
+                        profile.weightUnit === "lbs"
+                          ? colors.primaryForeground
+                          : colors.mutedForeground,
                     },
                   ]}
                 >
@@ -293,7 +354,12 @@ export default function ProfileScreen() {
       </View>
 
       <SectionHeader title="DATA" />
-      <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.section,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
         <SettingsRow
           icon="database"
           label="Weight Logs"
@@ -307,13 +373,28 @@ export default function ProfileScreen() {
       </View>
 
       <SectionHeader title="ABOUT" />
-      <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <SettingsRow icon="zap" label="KINETIC" sublabel="Gym Progress Tracker" />
+      <View
+        style={[
+          styles.section,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <SettingsRow
+          icon="zap"
+          label="KINETIC"
+          sublabel="Gym Progress Tracker"
+        />
         <SettingsRow icon="code" label="Version" sublabel="1.0.0" />
         <SettingsRow
           icon="shield"
           label="Data Storage"
           sublabel="All data is stored locally on your device"
+        />
+        <SettingsRow
+          icon="log-out"
+          label="Sign Out"
+          sublabel="Logout from your account"
+          onPress={signOut}
         />
       </View>
     </ScrollView>

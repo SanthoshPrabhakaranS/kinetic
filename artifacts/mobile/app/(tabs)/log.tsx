@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import React from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useMemo } from "react";
 import {
   Platform,
   ScrollView,
@@ -16,15 +16,25 @@ import { LogEntryCard } from "@/components/LogEntryCard";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
 
-function getFormattedDate() {
-  return new Date().toLocaleDateString("en-US", {
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getFormattedDate(dateKey: string) {
+  const parsed = new Date(`${dateKey}T12:00:00`);
+  return parsed.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
 }
 
-function calcTotalVolume(entries: { sets: { weight?: number; reps?: number }[] }[]) {
+function calcTotalVolume(
+  entries: { sets: { weight?: number; reps?: number }[] }[],
+) {
   return entries.reduce((total, entry) => {
     return (
       total +
@@ -36,31 +46,52 @@ function calcTotalVolume(entries: { sets: { weight?: number; reps?: number }[] }
 export default function LogScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { todayLog } = useWorkout();
+  const { selectedDate } = useLocalSearchParams<{ selectedDate?: string }>();
+  const { workoutLogs } = useWorkout();
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const entries = todayLog?.entries ?? [];
+  const selectedDateKey = useMemo(() => {
+    if (typeof selectedDate === "string" && selectedDate.trim()) {
+      return selectedDate.trim();
+    }
+    return toDateInputValue(new Date());
+  }, [selectedDate]);
+
+  const selectedLog = useMemo(
+    () => workoutLogs.find((log) => log.date === selectedDateKey) ?? null,
+    [selectedDateKey, workoutLogs],
+  );
+  const entries = selectedLog?.entries ?? [];
   const totalVolume = calcTotalVolume(entries);
+  const isToday = selectedDateKey === toDateInputValue(new Date());
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.background }]}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: topPad + 12, backgroundColor: colors.background },
+        ]}
+      >
         <View style={styles.titleRow}>
           <View>
             <Text style={[styles.screenTitle, { color: colors.foreground }]}>
-              Today's Log
+              {isToday ? "Today's Log" : "Selected Day Log"}
             </Text>
             <Text style={[styles.dateText, { color: colors.mutedForeground }]}>
-              {getFormattedDate()}
+              {getFormattedDate(selectedDateKey)}
             </Text>
           </View>
           <TouchableOpacity
             style={[styles.addBtn, { backgroundColor: colors.primary }]}
             onPress={() => {
               void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              router.push("/quick-log");
+              router.push({
+                pathname: "/quick-log",
+                params: { selectedDate: selectedDateKey },
+              });
             }}
             activeOpacity={0.8}
           >
@@ -70,27 +101,48 @@ export default function LogScreen() {
 
         {entries.length > 0 && (
           <View style={styles.statsRow}>
-            <View style={[styles.statChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View
+              style={[
+                styles.statChip,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <Text style={[styles.statValue, { color: colors.primary }]}>
                 {entries.length}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.statLabel, { color: colors.mutedForeground }]}
+              >
                 exercises
               </Text>
             </View>
-            <View style={[styles.statChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View
+              style={[
+                styles.statChip,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <Text style={[styles.statValue, { color: colors.primary }]}>
                 {entries.reduce((s, e) => s + e.sets.length, 0)}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.statLabel, { color: colors.mutedForeground }]}
+              >
                 sets
               </Text>
             </View>
-            <View style={[styles.statChip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View
+              style={[
+                styles.statChip,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
               <Text style={[styles.statValue, { color: colors.primary }]}>
                 {Math.round(totalVolume).toLocaleString()}
               </Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.statLabel, { color: colors.mutedForeground }]}
+              >
                 kg total
               </Text>
             </View>
@@ -99,15 +151,16 @@ export default function LogScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: botPad + 80 },
-        ]}
+        contentContainerStyle={[styles.content, { paddingBottom: botPad + 80 }]}
         showsVerticalScrollIndicator={false}
       >
         {entries.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Feather name="clipboard" size={48} color={colors.mutedForeground} />
+            <Feather
+              name="clipboard"
+              size={48}
+              color={colors.mutedForeground}
+            />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
               No workout logged
             </Text>
@@ -116,11 +169,21 @@ export default function LogScreen() {
             </Text>
             <TouchableOpacity
               style={[styles.startBtn, { backgroundColor: colors.primary }]}
-              onPress={() => router.push("/quick-log")}
+              onPress={() =>
+                router.push({
+                  pathname: "/quick-log",
+                  params: { selectedDate: selectedDateKey },
+                })
+              }
               activeOpacity={0.8}
             >
               <Feather name="zap" size={16} color={colors.primaryForeground} />
-              <Text style={[styles.startBtnText, { color: colors.primaryForeground }]}>
+              <Text
+                style={[
+                  styles.startBtnText,
+                  { color: colors.primaryForeground },
+                ]}
+              >
                 Start Workout
               </Text>
             </TouchableOpacity>
@@ -134,7 +197,10 @@ export default function LogScreen() {
                 onPress={() => {
                   router.push({
                     pathname: "/quick-log",
-                    params: { exerciseId: entry.exerciseId },
+                    params: {
+                      exerciseId: entry.exerciseId,
+                      selectedDate: selectedDateKey,
+                    },
                   });
                 }}
               />

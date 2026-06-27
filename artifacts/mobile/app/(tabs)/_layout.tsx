@@ -18,12 +18,10 @@ function NativeTabLayout() {
         <Label>Home</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="library">
-        <Icon sf={{ default: "books.vertical", selected: "books.vertical.fill" }} />
+        <Icon
+          sf={{ default: "books.vertical", selected: "books.vertical.fill" }}
+        />
         <Label>Library</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="log">
-        <Icon sf={{ default: "plus.square", selected: "plus.square.fill" }} />
-        <Label>Log</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="progress">
         <Icon sf={{ default: "chart.bar", selected: "chart.bar.fill" }} />
@@ -34,7 +32,9 @@ function NativeTabLayout() {
         <Label>History</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person.circle", selected: "person.circle.fill" }} />
+        <Icon
+          sf={{ default: "person.circle", selected: "person.circle.fill" }}
+        />
         <Label>Profile</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
@@ -71,7 +71,10 @@ function ClassicTabLayout() {
             />
           ) : isWeb ? (
             <View
-              style={[StyleSheet.absoluteFill, { backgroundColor: colors.card }]}
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: colors.card },
+              ]}
             />
           ) : null,
         tabBarLabelStyle: {
@@ -105,18 +108,6 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="log"
-        options={{
-          title: "Log",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="plus.square" tintColor={color} size={22} />
-            ) : (
-              <Feather name="clipboard" size={20} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
         name="progress"
         options={{
           title: "Progress",
@@ -126,6 +117,12 @@ function ClassicTabLayout() {
             ) : (
               <Feather name="bar-chart-2" size={20} color={color} />
             ),
+        }}
+      />
+      <Tabs.Screen
+        name="log"
+        options={{
+          href: null,
         }}
       />
       <Tabs.Screen

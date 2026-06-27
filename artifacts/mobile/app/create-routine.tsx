@@ -24,7 +24,9 @@ export default function CreateRoutineScreen() {
   const { exercises, addRoutine } = useWorkout();
 
   const [routineName, setRoutineName] = useState("");
-  const [selectedExercises, setSelectedExercises] = useState<RoutineExercise[]>([]);
+  const [selectedExercises, setSelectedExercises] = useState<RoutineExercise[]>(
+    [],
+  );
   const [showPicker, setShowPicker] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,16 +50,21 @@ export default function CreateRoutineScreen() {
 
   const removeExercise = (exerciseId: string) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedExercises((prev) => prev.filter((r) => r.exerciseId !== exerciseId));
+    setSelectedExercises((prev) =>
+      prev.filter((r) => r.exerciseId !== exerciseId),
+    );
   };
 
   const adjustSets = (exerciseId: string, delta: number) => {
     setSelectedExercises((prev) =>
       prev.map((r) =>
         r.exerciseId === exerciseId
-          ? { ...r, targetSets: Math.max(1, Math.min(10, r.targetSets + delta)) }
-          : r
-      )
+          ? {
+              ...r,
+              targetSets: Math.max(1, Math.min(10, r.targetSets + delta)),
+            }
+          : r,
+      ),
     );
   };
 
@@ -77,7 +84,7 @@ export default function CreateRoutineScreen() {
     (ex) =>
       pickerQuery.trim() === "" ||
       ex.name.toLowerCase().includes(pickerQuery.toLowerCase()) ||
-      ex.muscleGroup.toLowerCase().includes(pickerQuery.toLowerCase())
+      ex.muscleGroup.toLowerCase().includes(pickerQuery.toLowerCase()),
   );
 
   return (
@@ -94,7 +101,12 @@ export default function CreateRoutineScreen() {
           <Text style={[styles.label, { color: colors.mutedForeground }]}>
             ROUTINE NAME
           </Text>
-          <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.inputWrap,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <TextInput
               style={[styles.input, { color: colors.foreground }]}
               placeholder="e.g. Summer Shred"
@@ -121,14 +133,24 @@ export default function CreateRoutineScreen() {
           {selectedExercises.map((re) => (
             <View
               key={re.exerciseId}
-              style={[styles.exerciseRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={[
+                styles.exerciseRow,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
             >
               <Feather name="menu" size={16} color={colors.mutedForeground} />
               <View style={styles.exerciseInfo}>
-                <Text style={[styles.exerciseName, { color: colors.foreground }]}>
+                <Text
+                  style={[styles.exerciseName, { color: colors.foreground }]}
+                >
                   {re.exerciseName}
                 </Text>
-                <Text style={[styles.exerciseMeta, { color: colors.mutedForeground }]}>
+                <Text
+                  style={[
+                    styles.exerciseMeta,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
                   {re.muscleGroup}
                 </Text>
               </View>
@@ -137,7 +159,11 @@ export default function CreateRoutineScreen() {
                   onPress={() => adjustSets(re.exerciseId, -1)}
                   hitSlop={8}
                 >
-                  <Feather name="minus" size={14} color={colors.mutedForeground} />
+                  <Feather
+                    name="minus"
+                    size={14}
+                    color={colors.mutedForeground}
+                  />
                 </TouchableOpacity>
                 <Text style={[styles.setsCount, { color: colors.foreground }]}>
                   {re.targetSets} SETS
@@ -146,10 +172,17 @@ export default function CreateRoutineScreen() {
                   onPress={() => adjustSets(re.exerciseId, 1)}
                   hitSlop={8}
                 >
-                  <Feather name="plus" size={14} color={colors.mutedForeground} />
+                  <Feather
+                    name="plus"
+                    size={14}
+                    color={colors.mutedForeground}
+                  />
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity onPress={() => removeExercise(re.exerciseId)} hitSlop={8}>
+              <TouchableOpacity
+                onPress={() => removeExercise(re.exerciseId)}
+                hitSlop={8}
+              >
                 <Feather name="x" size={18} color={colors.mutedForeground} />
               </TouchableOpacity>
             </View>
@@ -168,18 +201,27 @@ export default function CreateRoutineScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12, borderTopColor: colors.border }]}>
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: insets.bottom + 12, borderTopColor: colors.border },
+        ]}
+      >
         <TouchableOpacity
           style={[
             styles.createBtn,
-            { backgroundColor: isValid ? colors.primary : `${colors.primary}40` },
+            {
+              backgroundColor: isValid ? colors.primary : `${colors.primary}40`,
+            },
           ]}
           onPress={handleCreate}
           activeOpacity={0.85}
           disabled={!isValid || saving}
         >
           <Feather name="zap" size={18} color={colors.primaryForeground} />
-          <Text style={[styles.createBtnText, { color: colors.primaryForeground }]}>
+          <Text
+            style={[styles.createBtnText, { color: colors.primaryForeground }]}
+          >
             CREATE ROUTINE
           </Text>
         </TouchableOpacity>
@@ -192,7 +234,9 @@ export default function CreateRoutineScreen() {
         onRequestClose={() => setShowPicker(false)}
       >
         <View style={[styles.modal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+          <View
+            style={[styles.modalHeader, { borderBottomColor: colors.border }]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>
               Add Exercise
             </Text>
@@ -200,7 +244,12 @@ export default function CreateRoutineScreen() {
               <Feather name="x" size={22} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
-          <View style={[styles.modalSearch, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.modalSearch,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="search" size={16} color={colors.mutedForeground} />
             <TextInput
               style={[styles.modalSearchInput, { color: colors.foreground }]}
@@ -218,13 +267,17 @@ export default function CreateRoutineScreen() {
             contentContainerStyle={styles.modalList}
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => {
-              const added = selectedExercises.some((r) => r.exerciseId === item.id);
+              const added = selectedExercises.some(
+                (r) => r.exerciseId === item.id,
+              );
               return (
                 <TouchableOpacity
                   style={[
                     styles.modalItem,
                     {
-                      backgroundColor: added ? `${colors.primary}10` : colors.card,
+                      backgroundColor: added
+                        ? `${colors.primary}10`
+                        : colors.card,
                       borderColor: added ? colors.primary : colors.border,
                     },
                   ]}
@@ -238,17 +291,31 @@ export default function CreateRoutineScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.modalItemInfo}>
-                    <Text style={[styles.modalItemName, { color: colors.foreground }]}>
+                    <Text
+                      style={[
+                        styles.modalItemName,
+                        { color: colors.foreground },
+                      ]}
+                    >
                       {item.name}
                     </Text>
-                    <Text style={[styles.modalItemMeta, { color: colors.mutedForeground }]}>
+                    <Text
+                      style={[
+                        styles.modalItemMeta,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
                       {item.muscleGroup} · {item.equipment}
                     </Text>
                   </View>
                   {added ? (
                     <Feather name="check" size={16} color={colors.primary} />
                   ) : (
-                    <Feather name="plus" size={16} color={colors.mutedForeground} />
+                    <Feather
+                      name="plus"
+                      size={16}
+                      color={colors.mutedForeground}
+                    />
                   )}
                 </TouchableOpacity>
               );
@@ -367,6 +434,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontFamily: "Inter_700Bold",
+    marginTop: 2,
   },
   modalSearch: {
     flexDirection: "row",

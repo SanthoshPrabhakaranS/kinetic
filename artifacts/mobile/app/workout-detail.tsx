@@ -39,11 +39,16 @@ function EntryCard({ entry }: { entry: WorkoutEntry }) {
   const totalReps = entry.sets.reduce((t, s) => t + (s.reps ?? 0), 0);
   const volume = entry.sets.reduce(
     (t, s) => t + (s.weight ?? 0) * (s.reps ?? 1),
-    0
+    0,
   );
 
   return (
-    <View style={[styles.entryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.entryCard,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
+    >
       <View style={styles.entryHeader}>
         <View>
           <Text style={[styles.entryName, { color: colors.foreground }]}>
@@ -57,7 +62,9 @@ function EntryCard({ entry }: { entry: WorkoutEntry }) {
           <Text style={[styles.entryVolume, { color: colors.primary }]}>
             {Math.round(volume)} kg
           </Text>
-          <Text style={[styles.entryVolLabel, { color: colors.mutedForeground }]}>
+          <Text
+            style={[styles.entryVolLabel, { color: colors.mutedForeground }]}
+          >
             volume
           </Text>
         </View>
@@ -67,17 +74,32 @@ function EntryCard({ entry }: { entry: WorkoutEntry }) {
 
       <View style={[styles.setsTable, { borderColor: colors.border }]}>
         <View style={[styles.tableHead, { borderBottomColor: colors.border }]}>
-          <Text style={[styles.th, { color: colors.mutedForeground, width: 36 }]}>SET</Text>
-          <Text style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}>WEIGHT</Text>
-          <Text style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}>REPS</Text>
-          <Text style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}>VOLUME</Text>
+          <Text
+            style={[styles.th, { color: colors.mutedForeground, width: 36 }]}
+          >
+            SET
+          </Text>
+          <Text style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}>
+            WEIGHT
+          </Text>
+          <Text style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}>
+            REPS
+          </Text>
+          <Text style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}>
+            VOLUME
+          </Text>
         </View>
         {entry.sets.map((set) => (
           <View
             key={set.setNumber}
             style={[styles.tableRow, { borderBottomColor: colors.border }]}
           >
-            <View style={[styles.setNumBadge, { backgroundColor: `${colors.primary}15` }]}>
+            <View
+              style={[
+                styles.setNumBadge,
+                { backgroundColor: `${colors.primary}15` },
+              ]}
+            >
               <Text style={[styles.setNumText, { color: colors.primary }]}>
                 {set.setNumber}
               </Text>
@@ -88,7 +110,9 @@ function EntryCard({ entry }: { entry: WorkoutEntry }) {
             <Text style={[styles.td, { color: colors.foreground, flex: 1 }]}>
               {set.reps != null ? `${set.reps}` : "—"}
             </Text>
-            <Text style={[styles.td, { color: colors.mutedForeground, flex: 1 }]}>
+            <Text
+              style={[styles.td, { color: colors.mutedForeground, flex: 1 }]}
+            >
               {set.weight != null && set.reps != null
                 ? `${Math.round(set.weight * set.reps)} kg`
                 : "—"}
@@ -102,19 +126,31 @@ function EntryCard({ entry }: { entry: WorkoutEntry }) {
           <Text style={[styles.summaryValue, { color: colors.foreground }]}>
             {entry.sets.length}
           </Text>
-          <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Sets</Text>
+          <Text
+            style={[styles.summaryLabel, { color: colors.mutedForeground }]}
+          >
+            Sets
+          </Text>
         </View>
         <View style={styles.summaryItem}>
           <Text style={[styles.summaryValue, { color: colors.foreground }]}>
             {maxWeight} kg
           </Text>
-          <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Best set</Text>
+          <Text
+            style={[styles.summaryLabel, { color: colors.mutedForeground }]}
+          >
+            Best set
+          </Text>
         </View>
         <View style={styles.summaryItem}>
           <Text style={[styles.summaryValue, { color: colors.foreground }]}>
             {totalReps}
           </Text>
-          <Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Total reps</Text>
+          <Text
+            style={[styles.summaryLabel, { color: colors.mutedForeground }]}
+          >
+            Total reps
+          </Text>
         </View>
       </View>
     </View>
@@ -137,7 +173,9 @@ export default function WorkoutDetailScreen() {
           Workout not found
         </Text>
         <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.backLink, { color: colors.primary }]}>Go back</Text>
+          <Text style={[styles.backLink, { color: colors.primary }]}>
+            Go back
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -146,7 +184,7 @@ export default function WorkoutDetailScreen() {
   const totalVolume = log.entries.reduce(
     (t, e) =>
       t + e.sets.reduce((s, set) => s + (set.weight ?? 0) * (set.reps ?? 1), 0),
-    0
+    0,
   );
 
   return (
@@ -160,43 +198,62 @@ export default function WorkoutDetailScreen() {
             {formatDate(log.date)}
           </Text>
           <Text style={[styles.headerSub, { color: colors.mutedForeground }]}>
-            {log.entries.length} exercises · {Math.round(totalVolume).toLocaleString()} kg total
+            {log.entries.length} exercises ·{" "}
+            {Math.round(totalVolume).toLocaleString()} kg total
           </Text>
         </View>
       </View>
 
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: botPad + 20 },
-        ]}
+        contentContainerStyle={[styles.content, { paddingBottom: botPad + 20 }]}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.overviewRow}>
-          <View style={[styles.overviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.overviewCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="activity" size={16} color={colors.primary} />
             <Text style={[styles.overviewValue, { color: colors.foreground }]}>
               {log.entries.length}
             </Text>
-            <Text style={[styles.overviewLabel, { color: colors.mutedForeground }]}>
+            <Text
+              style={[styles.overviewLabel, { color: colors.mutedForeground }]}
+            >
               Exercises
             </Text>
           </View>
-          <View style={[styles.overviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.overviewCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="layers" size={16} color={colors.primary} />
             <Text style={[styles.overviewValue, { color: colors.foreground }]}>
               {log.entries.reduce((s, e) => s + e.sets.length, 0)}
             </Text>
-            <Text style={[styles.overviewLabel, { color: colors.mutedForeground }]}>
+            <Text
+              style={[styles.overviewLabel, { color: colors.mutedForeground }]}
+            >
               Total Sets
             </Text>
           </View>
-          <View style={[styles.overviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.overviewCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="trending-up" size={16} color={colors.primary} />
             <Text style={[styles.overviewValue, { color: colors.foreground }]}>
-              {Math.round(totalVolume / 1000 * 10) / 10}k
+              {Math.round((totalVolume / 1000) * 10) / 10}k
             </Text>
-            <Text style={[styles.overviewLabel, { color: colors.mutedForeground }]}>
+            <Text
+              style={[styles.overviewLabel, { color: colors.mutedForeground }]}
+            >
               kg Volume
             </Text>
           </View>
@@ -219,7 +276,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingTop: 40,
     paddingBottom: 14,
     borderBottomWidth: 1,
     gap: 12,

@@ -38,8 +38,12 @@ function getWeekVolumes(logs: WorkoutLog[]) {
     const volume = log
       ? log.entries.reduce(
           (t, e) =>
-            t + e.sets.reduce((s, set) => s + (set.weight ?? 0) * (set.reps ?? 1), 0),
-          0
+            t +
+            e.sets.reduce(
+              (s, set) => s + (set.weight ?? 0) * (set.reps ?? 1),
+              0,
+            ),
+          0,
         )
       : 0;
     days.push({ label, volume });
@@ -48,7 +52,10 @@ function getWeekVolumes(logs: WorkoutLog[]) {
 }
 
 function getPersonalRecords(logs: WorkoutLog[]) {
-  const records: Record<string, { name: string; weight: number; date: string }> = {};
+  const records: Record<
+    string,
+    { name: string; weight: number; date: string }
+  > = {};
   for (const log of logs) {
     for (const entry of log.entries) {
       for (const set of entry.sets) {
@@ -64,14 +71,18 @@ function getPersonalRecords(logs: WorkoutLog[]) {
       }
     }
   }
-  return Object.values(records).sort((a, b) => b.weight - a.weight).slice(0, 8);
+  return Object.values(records)
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 8);
 }
 
 function groupWeightByMonth(entries: WeightEntry[]) {
   const groups: { label: string; entries: WeightEntry[] }[] = [];
   for (const entry of entries) {
     const dt = new Date(entry.timestamp);
-    const label = dt.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase();
+    const label = dt
+      .toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      .toUpperCase();
     const last = groups[groups.length - 1];
     if (last && last.label === label) {
       last.entries.push(entry);
@@ -94,7 +105,9 @@ function WeightEntryRow({
   const colors = useColors();
   const dt = new Date(entry.timestamp);
   const dayNum = dt.getDate();
-  const dayName = dt.toLocaleDateString("en-US", { weekday: "long" }).toUpperCase();
+  const dayName = dt
+    .toLocaleDateString("en-US", { weekday: "long" })
+    .toUpperCase();
   const timeStr = dt.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
@@ -106,7 +119,11 @@ function WeightEntryRow({
       : null;
   const isLoss = delta != null && delta < 0;
   const isGain = delta != null && delta > 0;
-  const deltaColor = isLoss ? "#4ADE80" : isGain ? "#FF6B6B" : colors.mutedForeground;
+  const deltaColor = isLoss
+    ? "#4ADE80"
+    : isGain
+      ? "#FF6B6B"
+      : colors.mutedForeground;
 
   return (
     <TouchableOpacity
@@ -121,22 +138,29 @@ function WeightEntryRow({
         </Text>
       </View>
       <View style={styles.weightInfo}>
-        <Text style={[styles.dayName, { color: colors.foreground }]}>{dayName}</Text>
-        <Text style={[styles.timeText, { color: colors.mutedForeground }]}>{timeStr}</Text>
+        <Text style={[styles.dayName, { color: colors.foreground }]}>
+          {dayName}
+        </Text>
+        <Text style={[styles.timeText, { color: colors.mutedForeground }]}>
+          {timeStr}
+        </Text>
       </View>
       <View style={styles.weightRight}>
         <Text style={[styles.weightValue, { color: colors.foreground }]}>
           {entry.weight}
         </Text>
         {delta != null && (
-          <View style={[styles.deltaBadge, { backgroundColor: `${deltaColor}18` }]}>
+          <View
+            style={[styles.deltaBadge, { backgroundColor: `${deltaColor}18` }]}
+          >
             <Feather
               name={isLoss ? "trending-down" : isGain ? "trending-up" : "minus"}
               size={10}
               color={deltaColor}
             />
             <Text style={[styles.deltaText, { color: deltaColor }]}>
-              {isLoss ? "" : "+"}{delta} kg
+              {isLoss ? "" : "+"}
+              {delta} kg
             </Text>
           </View>
         )}
@@ -192,28 +216,55 @@ function AddWeightModal({
       onRequestClose={onClose}
     >
       <View style={[styles.modal, { backgroundColor: colors.background }]}>
-        <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+        <View
+          style={[styles.modalHeader, { borderBottomColor: colors.border }]}
+        >
           <TouchableOpacity onPress={onClose} hitSlop={12}>
-            <Text style={[styles.modalCancel, { color: colors.mutedForeground }]}>Cancel</Text>
+            <Text
+              style={[styles.modalCancel, { color: colors.mutedForeground }]}
+            >
+              Cancel
+            </Text>
           </TouchableOpacity>
-          <Text style={[styles.modalTitle, { color: colors.foreground }]}>Log Weight</Text>
+          <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+            Log Weight
+          </Text>
           <TouchableOpacity onPress={handleSave} hitSlop={12}>
-            <Text style={[styles.modalSave, { color: colors.primary }]}>Save</Text>
+            <Text style={[styles.modalSave, { color: colors.primary }]}>
+              Save
+            </Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.modalContent}>
-          <View style={[styles.dateTimeRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.dateTimeRow,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="calendar" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.dateText, { color: colors.mutedForeground }]}>{dateStr}</Text>
-            <View style={[styles.timeDot, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dateText, { color: colors.mutedForeground }]}>
+              {dateStr}
+            </Text>
+            <View
+              style={[styles.timeDot, { backgroundColor: colors.border }]}
+            />
             <Feather name="clock" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.timeText2, { color: colors.mutedForeground }]}>{timeStr}</Text>
+            <Text style={[styles.timeText2, { color: colors.mutedForeground }]}>
+              {timeStr}
+            </Text>
           </View>
 
           <View style={styles.weightDisplay}>
-            <Text style={[styles.weightBig, { color: colors.primary }]}>{value}</Text>
-            <Text style={[styles.weightUnitBig, { color: colors.mutedForeground }]}>kg</Text>
+            <Text style={[styles.weightBig, { color: colors.primary }]}>
+              {value}
+            </Text>
+            <Text
+              style={[styles.weightUnitBig, { color: colors.mutedForeground }]}
+            >
+              kg
+            </Text>
           </View>
 
           <NumberPad onPress={handleKey} />
@@ -224,7 +275,9 @@ function AddWeightModal({
             activeOpacity={0.85}
           >
             <Feather name="check" size={18} color={colors.primaryForeground} />
-            <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
+            <Text
+              style={[styles.saveBtnText, { color: colors.primaryForeground }]}
+            >
               Log Weight
             </Text>
           </TouchableOpacity>
@@ -238,8 +291,12 @@ export default function ProgressScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const {
-    workoutLogs, weightLogs, lastWeight, weeklyWeightChange,
-    addWeightEntry, deleteWeightEntry,
+    workoutLogs,
+    weightLogs,
+    lastWeight,
+    weeklyWeightChange,
+    addWeightEntry,
+    deleteWeightEntry,
   } = useWorkout();
 
   const [showAddWeight, setShowAddWeight] = useState(false);
@@ -247,7 +304,10 @@ export default function ProgressScreen() {
   const weekData = useMemo(() => getWeekVolumes(workoutLogs), [workoutLogs]);
   const prs = useMemo(() => getPersonalRecords(workoutLogs), [workoutLogs]);
   const maxVolume = Math.max(...weekData.map((d) => d.volume), 1);
-  const weightGroups = useMemo(() => groupWeightByMonth(weightLogs), [weightLogs]);
+  const weightGroups = useMemo(
+    () => groupWeightByMonth(weightLogs),
+    [weightLogs],
+  );
 
   const totalWorkouts = workoutLogs.length;
   const totalVolume = useMemo(
@@ -257,12 +317,16 @@ export default function ProgressScreen() {
           t +
           log.entries.reduce(
             (et, e) =>
-              et + e.sets.reduce((s, set) => s + (set.weight ?? 0) * (set.reps ?? 1), 0),
-            0
+              et +
+              e.sets.reduce(
+                (s, set) => s + (set.weight ?? 0) * (set.reps ?? 1),
+                0,
+              ),
+            0,
           ),
-        0
+        0,
       ),
-    [workoutLogs]
+    [workoutLogs],
   );
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -272,10 +336,10 @@ export default function ProgressScreen() {
     weeklyWeightChange == null
       ? colors.mutedForeground
       : weeklyWeightChange < 0
-      ? "#4ADE80"
-      : weeklyWeightChange > 0
-      ? "#FF6B6B"
-      : colors.mutedForeground;
+        ? "#4ADE80"
+        : weeklyWeightChange > 0
+          ? "#FF6B6B"
+          : colors.mutedForeground;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -286,31 +350,71 @@ export default function ProgressScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[styles.title, { color: colors.foreground }]}>Progress</Text>
+        <Text style={[styles.title, { color: colors.foreground }]}>
+          Progress
+        </Text>
 
         <View style={styles.overallRow}>
-          <View style={[styles.overallCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.overallCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="activity" size={18} color={colors.primary} />
-            <Text style={[styles.overallValue, { color: colors.foreground }]}>{totalWorkouts}</Text>
-            <Text style={[styles.overallLabel, { color: colors.mutedForeground }]}>Workouts</Text>
+            <Text style={[styles.overallValue, { color: colors.foreground }]}>
+              {totalWorkouts}
+            </Text>
+            <Text
+              style={[styles.overallLabel, { color: colors.mutedForeground }]}
+            >
+              Workouts
+            </Text>
           </View>
-          <View style={[styles.overallCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.overallCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="trending-up" size={18} color={colors.primary} />
             <Text style={[styles.overallValue, { color: colors.foreground }]}>
               {Math.round(totalVolume / 1000)}k
             </Text>
-            <Text style={[styles.overallLabel, { color: colors.mutedForeground }]}>kg Total</Text>
+            <Text
+              style={[styles.overallLabel, { color: colors.mutedForeground }]}
+            >
+              kg Total
+            </Text>
           </View>
-          <View style={[styles.overallCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.overallCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="award" size={18} color={colors.primary} />
-            <Text style={[styles.overallValue, { color: colors.foreground }]}>{prs.length}</Text>
-            <Text style={[styles.overallLabel, { color: colors.mutedForeground }]}>PRs Set</Text>
+            <Text style={[styles.overallValue, { color: colors.foreground }]}>
+              {prs.length}
+            </Text>
+            <Text
+              style={[styles.overallLabel, { color: colors.mutedForeground }]}
+            >
+              PRs Set
+            </Text>
           </View>
         </View>
 
-        <View style={[styles.currentWeightCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.currentWeightCard,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <View style={styles.cwHeader}>
-            <Text style={[styles.cwLabel, { color: colors.mutedForeground }]}>CURRENT WEIGHT</Text>
+            <Text style={[styles.cwLabel, { color: colors.mutedForeground }]}>
+              CURRENT WEIGHT
+            </Text>
             <TouchableOpacity
               style={[styles.cwAddBtn, { backgroundColor: colors.primary }]}
               onPress={() => {
@@ -320,7 +424,11 @@ export default function ProgressScreen() {
               activeOpacity={0.8}
             >
               <Feather name="plus" size={14} color={colors.primaryForeground} />
-              <Text style={[styles.cwAddText, { color: colors.primaryForeground }]}>Log</Text>
+              <Text
+                style={[styles.cwAddText, { color: colors.primaryForeground }]}
+              >
+                Log
+              </Text>
             </TouchableOpacity>
           </View>
 
@@ -330,27 +438,47 @@ export default function ProgressScreen() {
                 <Text style={[styles.cwWeight, { color: colors.foreground }]}>
                   {lastWeight}
                 </Text>
-                <Text style={[styles.cwUnit, { color: colors.mutedForeground }]}>KG</Text>
+                <Text
+                  style={[styles.cwUnit, { color: colors.mutedForeground }]}
+                >
+                  KG
+                </Text>
               </View>
               {weeklyWeightChange != null && (
-                <View style={[styles.cwChangePill, { backgroundColor: `${changeColor}15` }]}>
+                <View
+                  style={[
+                    styles.cwChangePill,
+                    { backgroundColor: `${changeColor}15` },
+                  ]}
+                >
                   <Feather
-                    name={weeklyWeightChange < 0 ? "trending-down" : weeklyWeightChange > 0 ? "trending-up" : "minus"}
+                    name={
+                      weeklyWeightChange < 0
+                        ? "trending-down"
+                        : weeklyWeightChange > 0
+                          ? "trending-up"
+                          : "minus"
+                    }
                     size={12}
                     color={changeColor}
                   />
                   <Text style={[styles.cwChangeText, { color: changeColor }]}>
-                    {weeklyWeightChange > 0 ? "+" : ""}{weeklyWeightChange} kg this week
+                    {weeklyWeightChange > 0 ? "+" : ""}
+                    {weeklyWeightChange} kg this week
                   </Text>
                 </View>
               )}
             </>
           ) : (
             <View style={styles.cwEmpty}>
-              <Text style={[styles.cwEmptyText, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.cwEmptyText, { color: colors.mutedForeground }]}
+              >
                 No weight logged yet
               </Text>
-              <Text style={[styles.cwEmptyHint, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.cwEmptyHint, { color: colors.mutedForeground }]}
+              >
                 Tap Log to add your first entry
               </Text>
             </View>
@@ -358,25 +486,45 @@ export default function ProgressScreen() {
         </View>
 
         {weightLogs.length > 0 && (
-          <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.section,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <View style={styles.sectionHeader}>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
                 Weight Log
               </Text>
-              <Text style={[styles.sectionHint, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.sectionHint, { color: colors.mutedForeground }]}
+              >
                 Hold to delete
               </Text>
             </View>
 
             {weightGroups.map((group) => (
               <View key={group.label}>
-                <View style={[styles.monthHeader, { borderBottomColor: colors.border }]}>
-                  <Text style={[styles.monthLabel, { color: colors.mutedForeground }]}>
+                <View
+                  style={[
+                    styles.monthHeader,
+                    { borderBottomColor: colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.monthLabel,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
                     {group.label}
                   </Text>
                 </View>
                 {group.entries.map((entry, i) => {
-                  const prevEntry = group.entries[i + 1] ?? weightLogs[weightLogs.indexOf(entry) + 1] ?? null;
+                  const prevEntry =
+                    group.entries[i + 1] ??
+                    weightLogs[weightLogs.indexOf(entry) + 1] ??
+                    null;
                   return (
                     <WeightEntryRow
                       key={entry.id}
@@ -393,7 +541,7 @@ export default function ProgressScreen() {
                               style: "destructive",
                               onPress: () => void deleteWeightEntry(entry.id),
                             },
-                          ]
+                          ],
                         );
                       }}
                     />
@@ -404,11 +552,20 @@ export default function ProgressScreen() {
           </View>
         )}
 
-        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Weekly Volume</Text>
+        <View
+          style={[
+            styles.section,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+            Weekly Volume
+          </Text>
           {workoutLogs.length === 0 ? (
             <View style={styles.emptyChart}>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.emptyText, { color: colors.mutedForeground }]}
+              >
                 Log workouts to see your progress
               </Text>
             </View>
@@ -422,12 +579,15 @@ export default function ProgressScreen() {
                         styles.barFill,
                         {
                           height: `${Math.max((day.volume / maxVolume) * 100, day.volume > 0 ? 4 : 0)}%`,
-                          backgroundColor: day.volume > 0 ? colors.primary : colors.muted,
+                          backgroundColor:
+                            day.volume > 0 ? colors.primary : colors.muted,
                         },
                       ]}
                     />
                   </View>
-                  <Text style={[styles.barLabel, { color: colors.mutedForeground }]}>
+                  <Text
+                    style={[styles.barLabel, { color: colors.mutedForeground }]}
+                  >
                     {day.label}
                   </Text>
                 </View>
@@ -436,11 +596,20 @@ export default function ProgressScreen() {
           )}
         </View>
 
-        <View style={[styles.section, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Personal Records</Text>
+        <View
+          style={[
+            styles.section,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+            Personal Records
+          </Text>
           {prs.length === 0 ? (
             <View style={styles.emptyChart}>
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.emptyText, { color: colors.mutedForeground }]}
+              >
                 No personal records yet
               </Text>
             </View>
@@ -451,21 +620,51 @@ export default function ProgressScreen() {
                   key={i}
                   style={[
                     styles.prRow,
-                    i < prs.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                    i < prs.length - 1 && {
+                      borderBottomWidth: 1,
+                      borderBottomColor: colors.border,
+                    },
                   ]}
                 >
-                  <View style={[styles.prRank, { backgroundColor: `${colors.primary}15` }]}>
-                    <Text style={[styles.prRankText, { color: colors.primary }]}>#{i + 1}</Text>
+                  <View
+                    style={[
+                      styles.prRank,
+                      { backgroundColor: `${colors.primary}15` },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.prRankText, { color: colors.primary }]}
+                    >
+                      #{i + 1}
+                    </Text>
                   </View>
                   <View style={styles.prInfo}>
-                    <Text style={[styles.prName, { color: colors.foreground }]}>{pr.name}</Text>
-                    <Text style={[styles.prDate, { color: colors.mutedForeground }]}>
-                      {new Date(pr.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    <Text style={[styles.prName, { color: colors.foreground }]}>
+                      {pr.name}
+                    </Text>
+                    <Text
+                      style={[styles.prDate, { color: colors.mutedForeground }]}
+                    >
+                      {new Date(pr.date).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}
                     </Text>
                   </View>
                   <View style={styles.prWeight}>
-                    <Text style={[styles.prWeightValue, { color: colors.primary }]}>{pr.weight}</Text>
-                    <Text style={[styles.prWeightUnit, { color: colors.mutedForeground }]}>kg</Text>
+                    <Text
+                      style={[styles.prWeightValue, { color: colors.primary }]}
+                    >
+                      {pr.weight}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.prWeightUnit,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      kg
+                    </Text>
                   </View>
                 </View>
               ))}
@@ -475,7 +674,10 @@ export default function ProgressScreen() {
       </ScrollView>
 
       <TouchableOpacity
-        style={[styles.fab, { backgroundColor: colors.primary, bottom: botPad + 80 }]}
+        style={[
+          styles.fab,
+          { backgroundColor: colors.primary, bottom: botPad + 80 },
+        ]}
         onPress={() => {
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setShowAddWeight(true);
@@ -501,21 +703,32 @@ const styles = StyleSheet.create({
 
   overallRow: { flexDirection: "row", gap: 10 },
   overallCard: {
-    flex: 1, borderRadius: 12, borderWidth: 1, padding: 14,
-    alignItems: "center", gap: 6,
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    alignItems: "center",
+    gap: 6,
   },
   overallValue: { fontSize: 20, fontFamily: "Inter_700Bold" },
   overallLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
 
   currentWeightCard: {
-    borderRadius: 14, borderWidth: 1, padding: 18, gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 18,
+    gap: 10,
   },
   cwHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  cwLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", letterSpacing: 1.5 },
+  cwLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 1.5,
+  },
   cwAddBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -555,7 +768,12 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: 4,
   },
-  sectionTitle: { fontSize: 15, fontFamily: "Inter_700Bold", padding: 16, paddingBottom: 0 },
+  sectionTitle: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    padding: 16,
+    paddingBottom: 0,
+  },
   sectionHint: { fontSize: 11, fontFamily: "Inter_400Regular" },
 
   monthHeader: {
@@ -600,24 +818,46 @@ const styles = StyleSheet.create({
   },
   deltaText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
 
-  emptyChart: { paddingVertical: 32, alignItems: "center", paddingHorizontal: 16 },
+  emptyChart: {
+    paddingVertical: 32,
+    alignItems: "center",
+    paddingHorizontal: 16,
+  },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
 
   chart: {
-    flexDirection: "row", alignItems: "flex-end", gap: 8,
-    height: 120, paddingHorizontal: 16, paddingBottom: 16,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 8,
+    height: 120,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   bar: { flex: 1, alignItems: "center", gap: 6, height: "100%" },
   barTrack: {
-    flex: 1, width: "100%", borderRadius: 4,
-    overflow: "hidden", justifyContent: "flex-end",
+    flex: 1,
+    width: "100%",
+    borderRadius: 4,
+    overflow: "hidden",
+    justifyContent: "flex-end",
   },
   barFill: { width: "100%", borderRadius: 4, minHeight: 4 },
   barLabel: { fontSize: 11, fontFamily: "Inter_500Medium" },
 
   prList: { gap: 0, paddingHorizontal: 16, paddingBottom: 8 },
-  prRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, gap: 12 },
-  prRank: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  prRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    gap: 12,
+  },
+  prRank: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   prRankText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   prInfo: { flex: 1, gap: 2 },
   prName: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
@@ -647,8 +887,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingTop: 40,
+    paddingBottom: 10,
     borderBottomWidth: 1,
   },
   modalTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },

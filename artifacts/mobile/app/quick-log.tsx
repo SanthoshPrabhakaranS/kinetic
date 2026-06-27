@@ -1,7 +1,13 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   FlatList,
   Modal,
@@ -47,10 +53,15 @@ function applyKey(current: string, key: string): string {
 export default function QuickLogScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { exerciseId } = useLocalSearchParams<{ exerciseId?: string }>();
+  const { exerciseId, selectedDate } = useLocalSearchParams<{
+    exerciseId?: string;
+    selectedDate?: string;
+  }>();
   const { exercises, addWorkoutEntry, getLastEntryForExercise } = useWorkout();
 
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
+    null,
+  );
   const [showPicker, setShowPicker] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
 
@@ -60,8 +71,9 @@ export default function QuickLogScreen() {
   const [saved, setSaved] = useState(false);
 
   const lastEntry = useMemo(
-    () => (selectedExercise ? getLastEntryForExercise(selectedExercise.id) : null),
-    [selectedExercise, getLastEntryForExercise]
+    () =>
+      selectedExercise ? getLastEntryForExercise(selectedExercise.id) : null,
+    [selectedExercise, getLastEntryForExercise],
   );
 
   useEffect(() => {
@@ -78,8 +90,8 @@ export default function QuickLogScreen() {
       const prefilled = lastEntry.sets.map((s) =>
         makeSet(
           s.weight != null ? s.weight.toString() : "0",
-          s.reps != null ? s.reps.toString() : "8"
-        )
+          s.reps != null ? s.reps.toString() : "8",
+        ),
       );
       setSets(prefilled);
       setActiveSetId(prefilled[0]!.id);
@@ -94,10 +106,10 @@ export default function QuickLogScreen() {
           if (activeField === "weight")
             return { ...s, weight: applyKey(s.weight, key) };
           return { ...s, reps: applyKey(s.reps, key) };
-        })
+        }),
       );
     },
-    [activeSetId, activeField]
+    [activeSetId, activeField],
   );
 
   const handleActivate = (setId: string, field: ActiveField) => {
@@ -132,7 +144,7 @@ export default function QuickLogScreen() {
         if (s.id !== activeSetId) return s;
         const cur = parseFloat(s.weight) || 0;
         return { ...s, weight: Math.max(0, cur + delta).toString() };
-      })
+      }),
     );
   };
 
@@ -145,8 +157,8 @@ export default function QuickLogScreen() {
       old.map((s) =>
         s.id === activeSetId
           ? { ...s, weight: prev.weight, reps: prev.reps }
-          : s
-      )
+          : s,
+      ),
     );
   };
 
@@ -161,13 +173,18 @@ export default function QuickLogScreen() {
       reps: parseInt(s.reps) || undefined,
     }));
 
-    await addWorkoutEntry({
-      exerciseId: selectedExercise.id,
-      exerciseName: selectedExercise.name,
-      muscleGroup: selectedExercise.muscleGroup,
-      equipment: selectedExercise.equipment,
-      sets: setsData,
-    });
+    await addWorkoutEntry(
+      {
+        exerciseId: selectedExercise.id,
+        exerciseName: selectedExercise.name,
+        muscleGroup: selectedExercise.muscleGroup,
+        equipment: selectedExercise.equipment,
+        sets: setsData,
+      },
+      typeof selectedDate === "string" && selectedDate.trim()
+        ? selectedDate
+        : undefined,
+    );
 
     setTimeout(() => router.back(), 500);
   };
@@ -176,7 +193,7 @@ export default function QuickLogScreen() {
     (ex) =>
       pickerQuery.trim() === "" ||
       ex.name.toLowerCase().includes(pickerQuery.toLowerCase()) ||
-      ex.muscleGroup.toLowerCase().includes(pickerQuery.toLowerCase())
+      ex.muscleGroup.toLowerCase().includes(pickerQuery.toLowerCase()),
   );
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -186,21 +203,36 @@ export default function QuickLogScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPad + 8, borderBottomColor: colors.border }]}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: topPad + 8, borderBottomColor: colors.border },
+        ]}
+      >
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Feather name="x" size={22} color={colors.mutedForeground} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Quick Log</Text>
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
+            Quick Log
+          </Text>
         </View>
         {selectedExercise && (
           <TouchableOpacity
-            style={[styles.saveHeaderBtn, { backgroundColor: saved ? colors.muted : colors.primary }]}
+            style={[
+              styles.saveHeaderBtn,
+              { backgroundColor: saved ? colors.muted : colors.primary },
+            ]}
             onPress={handleSave}
             disabled={saved}
             activeOpacity={0.8}
           >
-            <Text style={[styles.saveHeaderText, { color: colors.primaryForeground }]}>
+            <Text
+              style={[
+                styles.saveHeaderText,
+                { color: colors.primaryForeground },
+              ]}
+            >
               {saved ? "Saved!" : "Save"}
             </Text>
           </TouchableOpacity>
@@ -214,37 +246,71 @@ export default function QuickLogScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <TouchableOpacity
-          style={[styles.exerciseRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[
+            styles.exerciseRow,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
           onPress={() => setShowPicker(true)}
           activeOpacity={0.7}
         >
-          <View style={[styles.exerciseIcon, { backgroundColor: `${colors.primary}15` }]}>
+          <View
+            style={[
+              styles.exerciseIcon,
+              { backgroundColor: `${colors.primary}15` },
+            ]}
+          >
             <Feather name="activity" size={18} color={colors.primary} />
           </View>
           <View style={styles.exerciseInfo}>
             {selectedExercise ? (
               <>
-                <Text style={[styles.exerciseName, { color: colors.foreground }]}>
+                <Text
+                  style={[styles.exerciseName, { color: colors.foreground }]}
+                >
                   {selectedExercise.name}
                 </Text>
-                <Text style={[styles.exerciseMeta, { color: colors.mutedForeground }]}>
+                <Text
+                  style={[
+                    styles.exerciseMeta,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
                   {selectedExercise.muscleGroup} · {selectedExercise.equipment}
                 </Text>
               </>
             ) : (
-              <Text style={[styles.placeholder, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.placeholder, { color: colors.mutedForeground }]}
+              >
                 Select an exercise...
               </Text>
             )}
           </View>
-          <Feather name="chevron-down" size={16} color={colors.mutedForeground} />
+          <Feather
+            name="chevron-down"
+            size={16}
+            color={colors.mutedForeground}
+          />
         </TouchableOpacity>
 
         {lastEntry && (
-          <View style={[styles.lastSession, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.lastSession,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="clock" size={12} color={colors.mutedForeground} />
-            <Text style={[styles.lastSessionText, { color: colors.mutedForeground }]}>
-              Last session: {lastEntry.sets.map((s) => `${s.weight ?? "—"}kg × ${s.reps ?? "—"}`).join(", ")}
+            <Text
+              style={[
+                styles.lastSessionText,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              Last session:
+              {lastEntry.sets
+                .map((s) => `${s.weight ?? "—"}kg × ${s.reps ?? "—"}`)
+                .join(", ")}
             </Text>
           </View>
         )}
@@ -255,16 +321,35 @@ export default function QuickLogScreen() {
               <Text style={[styles.setsTitle, { color: colors.foreground }]}>
                 SETS
               </Text>
-              <Text style={[styles.setsCount, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.setsCount, { color: colors.mutedForeground }]}
+              >
                 {sets.length} {sets.length === 1 ? "set" : "sets"}
               </Text>
             </View>
 
-            <View style={[styles.setsTable, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={[styles.tableHead, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.thSet, { color: colors.mutedForeground }]}>SET</Text>
-                <Text style={[styles.thField, { color: colors.mutedForeground }]}>WEIGHT (kg)</Text>
-                <Text style={[styles.thField, { color: colors.mutedForeground }]}>REPS</Text>
+            <View
+              style={[
+                styles.setsTable,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <View
+                style={[styles.tableHead, { borderBottomColor: colors.border }]}
+              >
+                <Text style={[styles.thSet, { color: colors.mutedForeground }]}>
+                  SET
+                </Text>
+                <Text
+                  style={[styles.thField, { color: colors.mutedForeground }]}
+                >
+                  WEIGHT (kg)
+                </Text>
+                <Text
+                  style={[styles.thField, { color: colors.mutedForeground }]}
+                >
+                  REPS
+                </Text>
                 <View style={styles.thDel} />
               </View>
 
@@ -275,12 +360,24 @@ export default function QuickLogScreen() {
                     key={set.id}
                     style={[
                       styles.tableRow,
-                      index < sets.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                      index < sets.length - 1 && {
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.border,
+                      },
                       isActive && { backgroundColor: `${colors.primary}08` },
                     ]}
                   >
                     <View style={styles.setNumBox}>
-                      <Text style={[styles.setNum, { color: isActive ? colors.primary : colors.mutedForeground }]}>
+                      <Text
+                        style={[
+                          styles.setNum,
+                          {
+                            color: isActive
+                              ? colors.primary
+                              : colors.mutedForeground,
+                          },
+                        ]}
+                      >
                         {index + 1}
                       </Text>
                     </View>
@@ -288,10 +385,11 @@ export default function QuickLogScreen() {
                     <TouchableOpacity
                       style={[
                         styles.cellBtn,
-                        isActive && activeField === "weight" && {
-                          backgroundColor: `${colors.primary}20`,
-                          borderColor: colors.primary,
-                        },
+                        isActive &&
+                          activeField === "weight" && {
+                            backgroundColor: `${colors.primary}20`,
+                            borderColor: colors.primary,
+                          },
                         { borderColor: colors.border },
                       ]}
                       onPress={() => handleActivate(set.id, "weight")}
@@ -315,10 +413,11 @@ export default function QuickLogScreen() {
                     <TouchableOpacity
                       style={[
                         styles.cellBtn,
-                        isActive && activeField === "reps" && {
-                          backgroundColor: `${colors.primary}20`,
-                          borderColor: colors.primary,
-                        },
+                        isActive &&
+                          activeField === "reps" && {
+                            backgroundColor: `${colors.primary}20`,
+                            borderColor: colors.primary,
+                          },
                         { borderColor: colors.border },
                       ]}
                       onPress={() => handleActivate(set.id, "reps")}
@@ -348,7 +447,11 @@ export default function QuickLogScreen() {
                       <Feather
                         name="x"
                         size={14}
-                        color={sets.length <= 1 ? "transparent" : colors.mutedForeground}
+                        color={
+                          sets.length <= 1
+                            ? "transparent"
+                            : colors.mutedForeground
+                        }
                       />
                     </TouchableOpacity>
                   </View>
@@ -368,32 +471,67 @@ export default function QuickLogScreen() {
             </View>
 
             <View style={styles.quickRow}>
-              <Text style={[styles.quickLabel, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.quickLabel, { color: colors.mutedForeground }]}
+              >
                 Quick fill set {activeSetIndex + 1}:
               </Text>
               <View style={styles.quickBtns}>
                 <TouchableOpacity
-                  style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  style={[
+                    styles.quickBtn,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   onPress={() => handleQuickFill(2.5)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.quickBtnText, { color: colors.foreground }]}>+2.5kg</Text>
+                  <Text
+                    style={[styles.quickBtnText, { color: colors.foreground }]}
+                  >
+                    +2.5kg
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  style={[
+                    styles.quickBtn,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
                   onPress={() => handleQuickFill(5)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.quickBtnText, { color: colors.foreground }]}>+5kg</Text>
+                  <Text
+                    style={[styles.quickBtnText, { color: colors.foreground }]}
+                  >
+                    +5kg
+                  </Text>
                 </TouchableOpacity>
                 {activeSetIndex > 0 && (
                   <TouchableOpacity
-                    style={[styles.quickBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    style={[
+                      styles.quickBtn,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}
                     onPress={handleCopyPrev}
                     activeOpacity={0.7}
                   >
                     <Feather name="copy" size={12} color={colors.foreground} />
-                    <Text style={[styles.quickBtnText, { color: colors.foreground }]}>Copy prev</Text>
+                    <Text
+                      style={[
+                        styles.quickBtnText,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      Copy prev
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -401,25 +539,47 @@ export default function QuickLogScreen() {
 
             <View style={styles.numPadSection}>
               <View style={styles.numPadLabel}>
-                <Text style={[styles.numPadTitle, { color: colors.mutedForeground }]}>
-                  Set {activeSetIndex + 1} · {activeField === "weight" ? "Weight (kg)" : "Reps"}
+                <Text
+                  style={[
+                    styles.numPadTitle,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Set {activeSetIndex + 1} ·
+                  {activeField === "weight" ? "Weight (kg)" : "Reps"}
                 </Text>
                 <Text style={[styles.numPadValue, { color: colors.primary }]}>
-                  {activeField === "weight" ? activeSet?.weight : activeSet?.reps}
+                  {activeField === "weight"
+                    ? activeSet?.weight
+                    : activeSet?.reps}
                 </Text>
               </View>
               <NumberPad onPress={handleNumPad} />
             </View>
 
             <TouchableOpacity
-              style={[styles.saveBtn, { backgroundColor: saved ? colors.muted : colors.primary }]}
+              style={[
+                styles.saveBtn,
+                { backgroundColor: saved ? colors.muted : colors.primary },
+              ]}
               onPress={handleSave}
               activeOpacity={0.85}
               disabled={saved}
             >
-              <Feather name={saved ? "check-circle" : "check"} size={18} color={colors.primaryForeground} />
-              <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
-                {saved ? "Saved!" : `Save ${sets.length} ${sets.length === 1 ? "Set" : "Sets"}`}
+              <Feather
+                name={saved ? "check-circle" : "check"}
+                size={18}
+                color={colors.primaryForeground}
+              />
+              <Text
+                style={[
+                  styles.saveBtnText,
+                  { color: colors.primaryForeground },
+                ]}
+              >
+                {saved
+                  ? "Saved!"
+                  : `Save ${sets.length} ${sets.length === 1 ? "Set" : "Sets"}`}
               </Text>
             </TouchableOpacity>
           </>
@@ -442,15 +602,29 @@ export default function QuickLogScreen() {
         onRequestClose={() => setShowPicker(false)}
       >
         <View style={[styles.modal, { backgroundColor: colors.background }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+          <View
+            style={[styles.modalHeader, { borderBottomColor: colors.border }]}
+          >
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>
               Select Exercise
             </Text>
             <TouchableOpacity onPress={() => setShowPicker(false)} hitSlop={12}>
-              <Feather name="x" size={22} color={colors.mutedForeground} />
+              <Feather
+                style={{
+                  marginTop: 20,
+                }}
+                name="x"
+                size={22}
+                color={colors.mutedForeground}
+              />
             </TouchableOpacity>
           </View>
-          <View style={[styles.modalSearch, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.modalSearch,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <Feather name="search" size={16} color={colors.mutedForeground} />
             <TextInput
               style={[styles.modalSearchInput, { color: colors.foreground }]}
@@ -473,9 +647,13 @@ export default function QuickLogScreen() {
                   styles.modalItem,
                   {
                     backgroundColor:
-                      selectedExercise?.id === item.id ? `${colors.primary}12` : colors.card,
+                      selectedExercise?.id === item.id
+                        ? `${colors.primary}12`
+                        : colors.card,
                     borderColor:
-                      selectedExercise?.id === item.id ? colors.primary : colors.border,
+                      selectedExercise?.id === item.id
+                        ? colors.primary
+                        : colors.border,
                   },
                 ]}
                 onPress={() => {
@@ -487,10 +665,17 @@ export default function QuickLogScreen() {
                 activeOpacity={0.7}
               >
                 <View style={styles.modalItemInfo}>
-                  <Text style={[styles.modalItemName, { color: colors.foreground }]}>
+                  <Text
+                    style={[styles.modalItemName, { color: colors.foreground }]}
+                  >
                     {item.name}
                   </Text>
-                  <Text style={[styles.modalItemMeta, { color: colors.mutedForeground }]}>
+                  <Text
+                    style={[
+                      styles.modalItemMeta,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
                     {item.muscleGroup} · {item.equipment}
                   </Text>
                 </View>
@@ -576,8 +761,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 8,
   },
-  thSet: { width: 32, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5 },
-  thField: { flex: 1, fontSize: 10, fontFamily: "Inter_600SemiBold", letterSpacing: 0.5, textAlign: "center" },
+  thSet: {
+    width: 32,
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+  },
+  thField: {
+    flex: 1,
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+    textAlign: "center",
+  },
   thDel: { width: 28 },
   tableRow: {
     flexDirection: "row",
@@ -637,9 +833,17 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
-  saveBtnText: { fontSize: 15, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
+  saveBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 0.5,
+  },
   emptyBox: { alignItems: "center", paddingVertical: 60, gap: 12 },
-  emptyText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center" },
+  emptyText: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+  },
   modal: { flex: 1 },
   modalHeader: {
     flexDirection: "row",
@@ -650,7 +854,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
   },
-  modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold", marginTop: 20 },
   modalSearch: {
     flexDirection: "row",
     alignItems: "center",

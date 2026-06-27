@@ -34,7 +34,7 @@ function calcVolume(log: WorkoutLog) {
   return log.entries.reduce(
     (t, e) =>
       t + e.sets.reduce((s, set) => s + (set.weight ?? 0) * (set.reps ?? 1), 0),
-    0
+    0,
   );
 }
 
@@ -44,7 +44,10 @@ function WorkoutLogCard({ log }: { log: WorkoutLog }) {
 
   return (
     <TouchableOpacity
-      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.card, borderColor: colors.border },
+      ]}
       activeOpacity={0.7}
       onPress={() =>
         router.push({ pathname: "/workout-detail", params: { logId: log.id } })
@@ -64,12 +67,21 @@ function WorkoutLogCard({ log }: { log: WorkoutLog }) {
           </Text>
         </View>
         <View style={styles.rightCol}>
-          <View style={[styles.volumeTag, { backgroundColor: `${colors.primary}15` }]}>
+          <View
+            style={[
+              styles.volumeTag,
+              { backgroundColor: `${colors.primary}15` },
+            ]}
+          >
             <Text style={[styles.volumeText, { color: colors.primary }]}>
               {Math.round(volume).toLocaleString()} kg
             </Text>
           </View>
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+          <Feather
+            name="chevron-right"
+            size={16}
+            color={colors.mutedForeground}
+          />
         </View>
       </View>
 
@@ -93,11 +105,17 @@ function WorkoutLogCard({ log }: { log: WorkoutLog }) {
       <View style={styles.exerciseList}>
         {log.entries.slice(0, 3).map((entry, i) => (
           <View key={i} style={styles.exerciseRow}>
-            <View style={[styles.exerciseDot, { backgroundColor: colors.primary }]} />
-            <Text style={[styles.exerciseName, { color: colors.mutedForeground }]}>
+            <View
+              style={[styles.exerciseDot, { backgroundColor: colors.primary }]}
+            />
+            <Text
+              style={[styles.exerciseName, { color: colors.mutedForeground }]}
+            >
               {entry.exerciseName}
             </Text>
-            <Text style={[styles.exerciseSets, { color: colors.mutedForeground }]}>
+            <Text
+              style={[styles.exerciseSets, { color: colors.mutedForeground }]}
+            >
               {entry.sets.length} sets
             </Text>
           </View>
@@ -118,7 +136,7 @@ export default function HistoryScreen() {
   const { workoutLogs } = useWorkout();
 
   const sortedLogs = [...workoutLogs].sort((a, b) =>
-    b.date.localeCompare(a.date)
+    b.date.localeCompare(a.date),
   );
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -137,7 +155,9 @@ export default function HistoryScreen() {
         scrollEnabled={!!sortedLogs.length}
         ListHeaderComponent={
           <View style={styles.header}>
-            <Text style={[styles.title, { color: colors.foreground }]}>History</Text>
+            <Text style={[styles.title, { color: colors.foreground }]}>
+              History
+            </Text>
             <Text style={[styles.count, { color: colors.mutedForeground }]}>
               {workoutLogs.length} sessions total · tap to view details
             </Text>
