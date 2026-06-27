@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Redirect, router } from "expo-router";
 import React, { useMemo, useState } from "react";
@@ -203,6 +204,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_500Medium",
   },
+  pickerWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+  },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -242,9 +248,6 @@ export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showWeightModal, setShowWeightModal] = useState(false);
-  const [pickerDraft, setPickerDraft] = useState(() =>
-    toDateInputValue(new Date()),
-  );
   const [weightDraft, setWeightDraft] = useState("70");
   const weekWorkouts = getWeekWorkouts(workoutLogs);
 
@@ -298,19 +301,6 @@ export default function HomeScreen() {
           <TouchableOpacity
             activeOpacity={0.8}
             onPress={() => {
-              if (Platform.OS === "web") {
-                const picker = document.createElement("input");
-                picker.type = "date";
-                picker.value = selectedDateKey;
-                picker.onchange = () => {
-                  const next = picker.value;
-                  if (!next) return;
-                  setSelectedDate(new Date(`${next}T12:00:00`));
-                };
-                picker.click();
-                return;
-              }
-              setPickerDraft(selectedDateKey);
               setShowDatePicker(true);
             }}
           >
@@ -319,9 +309,23 @@ export default function HomeScreen() {
                 ? "TODAY"
                 : "SELECTED DAY"}
             </Text>
-            <Text style={[styles.date, { color: colors.foreground }]}>
-              {getDayName(selectedDate)}, {getFormattedDate(selectedDate)}
-            </Text>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <Text style={[styles.date, { color: colors.foreground }]}>
+                {getDayName(selectedDate)}, {getFormattedDate(selectedDate)}
+              </Text>
+              <Feather
+                style={{ marginLeft: 5, marginTop: 5 }}
+                name="chevron-down"
+                size={18}
+                color={colors.mutedForeground}
+              />
+            </View>
           </TouchableOpacity>
           <TouchableOpacity
             style={[
@@ -483,72 +487,21 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
-      <Modal
-        visible={showDatePicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDatePicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              Choose Date
-            </Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                { color: colors.foreground, borderColor: colors.border },
-              ]}
-              value={pickerDraft}
-              onChangeText={setPickerDraft}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={colors.mutedForeground}
-              autoCapitalize="none"
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, { borderColor: colors.border }]}
-                onPress={() => setShowDatePicker(false)}
-              >
-                <Text
-                  style={[styles.modalBtnText, { color: colors.foreground }]}
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalBtnPrimary,
-                  { backgroundColor: colors.primary },
-                ]}
-                onPress={() => {
-                  const next = pickerDraft.trim();
-                  if (!next) return;
-                  const parsed = new Date(`${next}T12:00:00`);
-                  if (!Number.isNaN(parsed.getTime())) {
-                    setSelectedDate(parsed);
-                  }
-                  setShowDatePicker(false);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.modalBtnText,
-                    { color: colors.primaryForeground },
-                  ]}
-                >
-                  Apply
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+      {showDatePicker && (
+        <View style={styles.pickerWrap}>
+          <DateTimePicker
+            value={selectedDate}
+            mode="date"
+            display="default"
+            onChange={(_, nextDate) => {
+              if (nextDate) {
+                setSelectedDate(nextDate);
+              }
+              setShowDatePicker(false);
+            }}
+          />
         </View>
-      </Modal>
+      )}
 
       <Modal
         visible={showWeightModal}

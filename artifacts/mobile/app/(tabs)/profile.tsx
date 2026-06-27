@@ -1,8 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { Redirect } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import {
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -84,6 +85,9 @@ export default function ProfileScreen() {
   const { theme, isDark, toggleTheme, setTheme } = useTheme();
   const { profile, updateProfile, workoutLogs, streak, weightLogs } =
     useWorkout();
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const appVersion =
+    (require("../../package.json") as { version?: string }).version ?? "0.0.0";
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -111,6 +115,16 @@ export default function ProfileScreen() {
   const handleThemeToggle = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await toggleTheme();
+  };
+
+  const handleSignOutPress = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setShowSignOutConfirm(true);
+  };
+
+  const confirmSignOut = async () => {
+    setShowSignOutConfirm(false);
+    await signOut();
   };
 
   if (!session) {
@@ -384,19 +398,77 @@ export default function ProfileScreen() {
           label="KINETIC"
           sublabel="Gym Progress Tracker"
         />
-        <SettingsRow icon="code" label="Version" sublabel="1.0.0" />
-        <SettingsRow
+        <SettingsRow icon="code" label="Version" sublabel={appVersion} />
+        {/* <SettingsRow
           icon="shield"
           label="Data Storage"
           sublabel="All data is stored locally on your device"
-        />
+        /> */}
         <SettingsRow
           icon="log-out"
           label="Sign Out"
           sublabel="Logout from your account"
-          onPress={signOut}
+          onPress={handleSignOutPress}
         />
       </View>
+
+      <Modal
+        visible={showSignOutConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSignOutConfirm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+              Sign out?
+            </Text>
+            <Text style={[styles.modalText, { color: colors.mutedForeground }]}>
+              You’ll need to sign in again to access your account.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.modalButtonSecondary,
+                  { borderColor: colors.border },
+                ]}
+                onPress={() => setShowSignOutConfirm(false)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[styles.modalButtonText, { color: colors.foreground }]}
+                >
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.modalButtonPrimary,
+                  { backgroundColor: colors.primary },
+                ]}
+                onPress={confirmSignOut}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.modalButtonText,
+                    { color: colors.primaryForeground },
+                  ]}
+                >
+                  Sign Out
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -449,6 +521,50 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     overflow: "hidden",
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.45)",
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: "Inter_700Bold",
+  },
+  modalText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 4,
+  },
+  modalButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    minWidth: 90,
+    alignItems: "center",
+  },
+  modalButtonSecondary: {
+    borderWidth: 1,
+  },
+  modalButtonPrimary: {},
+  modalButtonText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
   },
 
   row: {

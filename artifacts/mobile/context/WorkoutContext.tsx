@@ -89,6 +89,37 @@ const safeSyncTable = async (
   }
 };
 
+const deleteMissingRowsForUser = async (
+  tableName: string,
+  userId: string,
+  currentIds: string[],
+) => {
+  const { data, error } = await supabase
+    .from(tableName)
+    .select("id")
+    .eq("user_id", userId);
+
+  if (error) {
+    throw error;
+  }
+
+  const existingIds = (data ?? []).map((row: any) => String(row.id));
+  const idsToDelete = existingIds.filter((id) => !currentIds.includes(id));
+
+  if (idsToDelete.length === 0) {
+    return;
+  }
+
+  const { error: deleteError } = await supabase
+    .from(tableName)
+    .delete()
+    .in("id", idsToDelete);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+};
+
 const buildExerciseId = (userId: string, seed: string) => {
   const sanitized = seed.toLowerCase().replace(/[^a-z0-9]+/g, "_");
   return `ex_${userId.replace(/[^a-z0-9]+/gi, "")}_${sanitized}`;
@@ -266,119 +297,143 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      if (payload.workoutLogs.length > 0) {
-        const workoutLogRows = payload.workoutLogs.map((log) => ({
-          id: log.id,
-          user_id: persistedUserId,
-          date: log.date,
-        }));
-        const workoutEntryRows = payload.workoutLogs.flatMap((log) =>
-          log.entries.map((entry) => ({
-            id: entry.id,
-            workout_log_id: log.id,
-            user_id: persistedUserId,
-            exercise_id: entry.exerciseId,
-            exercise_name: entry.exerciseName,
-            muscle_group: entry.muscleGroup,
-            equipment: entry.equipment,
-            timestamp: entry.timestamp,
-          })),
-        );
-        const workoutSetRows = payload.workoutLogs.flatMap((log) =>
-          log.entries.flatMap((entry) =>
-            entry.sets.map((set) => ({
-              id: `${entry.id}-${set.setNumber}`,
-              workout_entry_id: entry.id,
-              user_id: persistedUserId,
-              set_number: set.setNumber,
-              weight: set.weight ?? null,
-              reps: set.reps ?? null,
-              duration: set.duration ?? null,
-            })),
-          ),
-        );
-
-        await safeSyncTable(WORKOUT_LOGS_TABLE, async () => {
-          const { error } = await supabase
-            .from(WORKOUT_LOGS_TABLE)
-            .upsert(workoutLogRows, { onConflict: "id" });
-          if (error) {
-            throw error;
-          }
-        });
-        await safeSyncTable(WORKOUT_ENTRIES_TABLE, async () => {
-          const { error } = await supabase
-            .from(WORKOUT_ENTRIES_TABLE)
-            .upsert(workoutEntryRows, { onConflict: "id" });
-          if (error) {
-            throw error;
-          }
-        });
-        await safeSyncTable(WORKOUT_SETS_TABLE, async () => {
-          const { error } = await supabase
-            .from(WORKOUT_SETS_TABLE)
-            .upsert(workoutSetRows, { onConflict: "id" });
-          if (error) {
-            throw error;
-          }
-        });
-      }
-
-      if (payload.routines.length > 0) {
-        const routineRows = payload.routines.map((routine) => ({
-          id: routine.id,
-          user_id: persistedUserId,
-          name: routine.name,
-          type: routine.type,
-        }));
-        const routineExerciseRows = payload.routines.flatMap((routine) =>
-          routine.exercises.map((exercise) => ({
-            id: `${routine.id}-${exercise.exerciseId}`,
-            routine_id: routine.id,
-            user_id: persistedUserId,
-            exercise_id: exercise.exerciseId,
-            exercise_name: exercise.exerciseName,
-            muscle_group: exercise.muscleGroup,
-            target_sets: exercise.targetSets,
-          })),
-        );
-
-        await safeSyncTable(ROUTINES_TABLE, async () => {
-          const { error } = await supabase
-            .from(ROUTINES_TABLE)
-            .upsert(routineRows, { onConflict: "id" });
-          if (error) {
-            throw error;
-          }
-        });
-        await safeSyncTable(ROUTINE_EXERCISES_TABLE, async () => {
-          const { error } = await supabase
-            .from(ROUTINE_EXERCISES_TABLE)
-            .upsert(routineExerciseRows, { onConflict: "id" });
-          if (error) {
-            throw error;
-          }
-        });
-      }
-
-      if (payload.weightLogs.length > 0) {
-        const weightRows = payload.weightLogs.map((entry) => ({
+      const workoutLogRows = payload.workoutLogs.map((log) => ({
+        id: log.id,
+        user_id: persistedUserId,
+        date: log.date,
+      }));
+      const workoutEntryRows = payload.workoutLogs.flatMap((log) =>
+        log.entries.map((entry) => ({
           id: entry.id,
+          workout_log_id: log.id,
           user_id: persistedUserId,
-          weight: entry.weight,
+          exercise_id: entry.exerciseId,
+          exercise_name: entry.exerciseName,
+          muscle_group: entry.muscleGroup,
+          equipment: entry.equipment,
           timestamp: entry.timestamp,
-          date: entry.date,
-        }));
+        })),
+      );
+      const workoutSetRows = payload.workoutLogs.flatMap((log) =>
+        log.entries.flatMap((entry) =>
+          entry.sets.map((set) => ({
+            id: `${entry.id}-${set.setNumber}`,
+            workout_entry_id: entry.id,
+            user_id: persistedUserId,
+            set_number: set.setNumber,
+            weight: set.weight ?? null,
+            reps: set.reps ?? null,
+            duration: set.duration ?? null,
+          })),
+        ),
+      );
 
-        await safeSyncTable(WEIGHT_ENTRIES_TABLE, async () => {
-          const { error } = await supabase
-            .from(WEIGHT_ENTRIES_TABLE)
-            .upsert(weightRows, { onConflict: "id" });
-          if (error) {
-            throw error;
-          }
-        });
-      }
+      await safeSyncTable(WORKOUT_LOGS_TABLE, async () => {
+        const { error } = await supabase
+          .from(WORKOUT_LOGS_TABLE)
+          .upsert(workoutLogRows, { onConflict: "id" });
+        if (error) {
+          throw error;
+        }
+        await deleteMissingRowsForUser(
+          WORKOUT_LOGS_TABLE,
+          persistedUserId,
+          workoutLogRows.map((row) => String(row.id)),
+        );
+      });
+      await safeSyncTable(WORKOUT_ENTRIES_TABLE, async () => {
+        const { error } = await supabase
+          .from(WORKOUT_ENTRIES_TABLE)
+          .upsert(workoutEntryRows, { onConflict: "id" });
+        if (error) {
+          throw error;
+        }
+        await deleteMissingRowsForUser(
+          WORKOUT_ENTRIES_TABLE,
+          persistedUserId,
+          workoutEntryRows.map((row) => String(row.id)),
+        );
+      });
+      await safeSyncTable(WORKOUT_SETS_TABLE, async () => {
+        const { error } = await supabase
+          .from(WORKOUT_SETS_TABLE)
+          .upsert(workoutSetRows, { onConflict: "id" });
+        if (error) {
+          throw error;
+        }
+        await deleteMissingRowsForUser(
+          WORKOUT_SETS_TABLE,
+          persistedUserId,
+          workoutSetRows.map((row) => String(row.id)),
+        );
+      });
+
+      const routineRows = payload.routines.map((routine) => ({
+        id: routine.id,
+        user_id: persistedUserId,
+        name: routine.name,
+        type: routine.type,
+      }));
+      const routineExerciseRows = payload.routines.flatMap((routine) =>
+        routine.exercises.map((exercise) => ({
+          id: `${routine.id}-${exercise.exerciseId}`,
+          routine_id: routine.id,
+          user_id: persistedUserId,
+          exercise_id: exercise.exerciseId,
+          exercise_name: exercise.exerciseName,
+          muscle_group: exercise.muscleGroup,
+          target_sets: exercise.targetSets,
+        })),
+      );
+
+      await safeSyncTable(ROUTINES_TABLE, async () => {
+        const { error } = await supabase
+          .from(ROUTINES_TABLE)
+          .upsert(routineRows, { onConflict: "id" });
+        if (error) {
+          throw error;
+        }
+        await deleteMissingRowsForUser(
+          ROUTINES_TABLE,
+          persistedUserId,
+          routineRows.map((row) => String(row.id)),
+        );
+      });
+      await safeSyncTable(ROUTINE_EXERCISES_TABLE, async () => {
+        const { error } = await supabase
+          .from(ROUTINE_EXERCISES_TABLE)
+          .upsert(routineExerciseRows, { onConflict: "id" });
+        if (error) {
+          throw error;
+        }
+        await deleteMissingRowsForUser(
+          ROUTINE_EXERCISES_TABLE,
+          persistedUserId,
+          routineExerciseRows.map((row) => String(row.id)),
+        );
+      });
+
+      const weightRows = payload.weightLogs.map((entry) => ({
+        id: entry.id,
+        user_id: persistedUserId,
+        weight: entry.weight,
+        timestamp: entry.timestamp,
+        date: entry.date,
+      }));
+
+      await safeSyncTable(WEIGHT_ENTRIES_TABLE, async () => {
+        const { error } = await supabase
+          .from(WEIGHT_ENTRIES_TABLE)
+          .upsert(weightRows, { onConflict: "id" });
+        if (error) {
+          throw error;
+        }
+        await deleteMissingRowsForUser(
+          WEIGHT_ENTRIES_TABLE,
+          persistedUserId,
+          weightRows.map((row) => String(row.id)),
+        );
+      });
     },
     [],
   );

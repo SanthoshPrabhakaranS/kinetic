@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import React, { useMemo, useState } from "react";
 import {
@@ -79,7 +80,7 @@ function getPersonalRecords(logs: WorkoutLog[]) {
 function groupWeightByMonth(entries: WeightEntry[]) {
   const groups: { label: string; entries: WeightEntry[] }[] = [];
   for (const entry of entries) {
-    const dt = new Date(entry.timestamp);
+    const dt = new Date(`${entry.date}T12:00:00`);
     const label = dt
       .toLocaleDateString("en-US", { month: "long", year: "numeric" })
       .toUpperCase();
@@ -103,14 +104,15 @@ function WeightEntryRow({
   onDelete: () => void;
 }) {
   const colors = useColors();
-  const dt = new Date(entry.timestamp);
+  const dt = new Date(`${entry.date}T12:00:00`);
   const dayNum = dt.getDate();
   const dayName = dt
     .toLocaleDateString("en-US", { weekday: "long" })
     .toUpperCase();
-  const timeStr = dt.toLocaleTimeString("en-US", {
-    hour: "2-digit",
-    minute: "2-digit",
+  const dateLabel = dt.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 
   const delta =
@@ -142,7 +144,7 @@ function WeightEntryRow({
           {dayName}
         </Text>
         <Text style={[styles.timeText, { color: colors.mutedForeground }]}>
-          {timeStr}
+          {dateLabel}
         </Text>
       </View>
       <View style={styles.weightRight}>
@@ -176,22 +178,27 @@ function AddWeightModal({
 }: {
   visible: boolean;
   onClose: () => void;
-  onSave: (weight: number) => void;
+  onSave: (weight: number, selectedDate?: string) => void;
 }) {
   const colors = useColors();
-  const insets = useSafeAreaInsets();
-  const [value, setValue] = useState("70");
+  const [value, setValue] = useState("0");
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("en-US", {
+  const dateStr = selectedDate.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  const timeStr = now.toLocaleTimeString("en-US", {
+  const timeStr = selectedDate.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
   });
+  const selectedDateKey = useMemo(
+    () =>
+      `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`,
+    [selectedDate],
+  );
 
   const handleKey = (key: string) => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -202,7 +209,7 @@ function AddWeightModal({
     const parsed = parseFloat(value);
     if (!isNaN(parsed) && parsed > 0) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onSave(parsed);
+      onSave(parsed, selectedDateKey);
       setValue("70");
       onClose();
     }
@@ -237,23 +244,49 @@ function AddWeightModal({
         </View>
 
         <View style={styles.modalContent}>
-          <View
-            style={[
-              styles.dateTimeRow,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Feather name="calendar" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.dateText, { color: colors.mutedForeground }]}>
-              {dateStr}
-            </Text>
-            <View
-              style={[styles.timeDot, { backgroundColor: colors.border }]}
-            />
-            <Feather name="clock" size={14} color={colors.mutedForeground} />
-            <Text style={[styles.timeText2, { color: colors.mutedForeground }]}>
-              {timeStr}
-            </Text>
+          <View>
+            <TouchableOpacity
+              style={[
+                styles.dateTimeRow,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Feather
+                name="calendar"
+                size={14}
+                color={colors.mutedForeground}
+              />
+              <Text
+                style={[styles.dateText, { color: colors.mutedForeground }]}
+              >
+                {dateStr}
+              </Text>
+              <View
+                style={[styles.timeDot, { backgroundColor: colors.border }]}
+              />
+              <Feather name="clock" size={14} color={colors.mutedForeground} />
+              <Text
+                style={[styles.timeText2, { color: colors.mutedForeground }]}
+              >
+                {timeStr}
+              </Text>
+            </TouchableOpacity>
+            {showDatePicker && (
+              <View style={styles.inlinePickerWrap}>
+                <DateTimePicker
+                  value={selectedDate}
+                  mode="date"
+                  display="default"
+                  onChange={(_, nextDate) => {
+                    setShowDatePicker(false);
+                    if (nextDate) {
+                      setSelectedDate(nextDate);
+                    }
+                  }}
+                />
+              </View>
+            )}
           </View>
 
           <View style={styles.weightDisplay}>
@@ -300,6 +333,10 @@ export default function ProgressScreen() {
   } = useWorkout();
 
   const [showAddWeight, setShowAddWeight] = useState(false);
+  const [visibleWeightEntries, setVisibleWeightEntries] = useState(5);
+  const [visiblePrLimit, setVisiblePrLimit] = useState(10);
+  const [isWeightExpanded, setIsWeightExpanded] = useState(false);
+  const [isPrExpanded, setIsPrExpanded] = useState(false);
 
   const weekData = useMemo(() => getWeekVolumes(workoutLogs), [workoutLogs]);
   const prs = useMemo(() => getPersonalRecords(workoutLogs), [workoutLogs]);
@@ -310,6 +347,31 @@ export default function ProgressScreen() {
   );
 
   const totalWorkouts = workoutLogs.length;
+  const visibleWeightGroups = useMemo(() => {
+    const flatEntries = weightLogs.slice(
+      0,
+      isWeightExpanded ? weightLogs.length : visibleWeightEntries,
+    );
+    if (flatEntries.length === 0) return [];
+
+    const groups: { label: string; entries: WeightEntry[] }[] = [];
+    for (const entry of flatEntries) {
+      const dt = new Date(entry.timestamp);
+      const label = dt
+        .toLocaleDateString("en-US", { month: "long", year: "numeric" })
+        .toUpperCase();
+      const last = groups[groups.length - 1];
+      if (last && last.label === label) {
+        last.entries.push(entry);
+      } else {
+        groups.push({ label, entries: [entry] });
+      }
+    }
+    return groups;
+  }, [isWeightExpanded, visibleWeightEntries, weightLogs]);
+  const visiblePrs = prs.slice(0, isPrExpanded ? prs.length : visiblePrLimit);
+  const hasMoreWeightEntries = weightLogs.length > visibleWeightEntries;
+  const hasMorePrs = prs.length > visiblePrLimit;
   const totalVolume = useMemo(
     () =>
       workoutLogs.reduce(
@@ -423,11 +485,10 @@ export default function ProgressScreen() {
               }}
               activeOpacity={0.8}
             >
-              <Feather name="plus" size={14} color={colors.primaryForeground} />
               <Text
                 style={[styles.cwAddText, { color: colors.primaryForeground }]}
               >
-                Log
+                Log Weight
               </Text>
             </TouchableOpacity>
           </View>
@@ -479,7 +540,7 @@ export default function ProgressScreen() {
               <Text
                 style={[styles.cwEmptyHint, { color: colors.mutedForeground }]}
               >
-                Tap Log to add your first entry
+                Tap Log Weight to add your first entry
               </Text>
             </View>
           )}
@@ -503,7 +564,7 @@ export default function ProgressScreen() {
               </Text>
             </View>
 
-            {weightGroups.map((group) => (
+            {visibleWeightGroups.map((group) => (
               <View key={group.label}>
                 <View
                   style={[
@@ -549,6 +610,24 @@ export default function ProgressScreen() {
                 })}
               </View>
             ))}
+            {hasMoreWeightEntries && (
+              <TouchableOpacity
+                style={styles.loadMoreButton}
+                onPress={() => {
+                  if (isWeightExpanded) {
+                    setIsWeightExpanded(false);
+                    setVisibleWeightEntries(5);
+                  } else {
+                    setIsWeightExpanded(true);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.loadMoreText, { color: colors.primary }]}>
+                  {isWeightExpanded ? "View Less" : "View More"}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -558,7 +637,7 @@ export default function ProgressScreen() {
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+          <Text style={[styles.sectionTitleV2, { color: colors.foreground }]}>
             Weekly Volume
           </Text>
           {workoutLogs.length === 0 ? (
@@ -602,7 +681,7 @@ export default function ProgressScreen() {
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
+          <Text style={[styles.sectionTitleV2, { color: colors.foreground }]}>
             Personal Records
           </Text>
           {prs.length === 0 ? (
@@ -614,83 +693,99 @@ export default function ProgressScreen() {
               </Text>
             </View>
           ) : (
-            <View style={styles.prList}>
-              {prs.map((pr, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.prRow,
-                    i < prs.length - 1 && {
-                      borderBottomWidth: 1,
-                      borderBottomColor: colors.border,
-                    },
-                  ]}
-                >
+            <>
+              <View style={styles.prList}>
+                {visiblePrs.map((pr, i) => (
                   <View
+                    key={i}
                     style={[
-                      styles.prRank,
-                      { backgroundColor: `${colors.primary}15` },
+                      styles.prRow,
+                      i < prs.length - 1 && {
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.border,
+                      },
                     ]}
                   >
-                    <Text
-                      style={[styles.prRankText, { color: colors.primary }]}
-                    >
-                      #{i + 1}
-                    </Text>
-                  </View>
-                  <View style={styles.prInfo}>
-                    <Text style={[styles.prName, { color: colors.foreground }]}>
-                      {pr.name}
-                    </Text>
-                    <Text
-                      style={[styles.prDate, { color: colors.mutedForeground }]}
-                    >
-                      {new Date(pr.date).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </Text>
-                  </View>
-                  <View style={styles.prWeight}>
-                    <Text
-                      style={[styles.prWeightValue, { color: colors.primary }]}
-                    >
-                      {pr.weight}
-                    </Text>
-                    <Text
+                    <View
                       style={[
-                        styles.prWeightUnit,
-                        { color: colors.mutedForeground },
+                        styles.prRank,
+                        { backgroundColor: `${colors.primary}15` },
                       ]}
                     >
-                      kg
-                    </Text>
+                      <Text
+                        style={[styles.prRankText, { color: colors.primary }]}
+                      >
+                        #{i + 1}
+                      </Text>
+                    </View>
+                    <View style={styles.prInfo}>
+                      <Text
+                        style={[styles.prName, { color: colors.foreground }]}
+                      >
+                        {pr.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.prDate,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        {new Date(pr.date).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </Text>
+                    </View>
+                    <View style={styles.prWeight}>
+                      <Text
+                        style={[
+                          styles.prWeightValue,
+                          { color: colors.primary },
+                        ]}
+                      >
+                        {pr.weight}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.prWeightUnit,
+                          { color: colors.mutedForeground },
+                        ]}
+                      >
+                        kg
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              ))}
-            </View>
+                ))}
+              </View>
+              {hasMorePrs && (
+                <TouchableOpacity
+                  style={styles.loadMoreButton}
+                  onPress={() => {
+                    if (isPrExpanded) {
+                      setIsPrExpanded(false);
+                      setVisiblePrLimit(10);
+                    } else {
+                      setIsPrExpanded(true);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[styles.loadMoreText, { color: colors.primary }]}
+                  >
+                    {isPrExpanded ? "View Less" : "View More"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
       </ScrollView>
 
-      <TouchableOpacity
-        style={[
-          styles.fab,
-          { backgroundColor: colors.primary, bottom: botPad + 80 },
-        ]}
-        onPress={() => {
-          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          setShowAddWeight(true);
-        }}
-        activeOpacity={0.85}
-      >
-        <Feather name="plus" size={24} color={colors.primaryForeground} />
-      </TouchableOpacity>
-
       <AddWeightModal
         visible={showAddWeight}
         onClose={() => setShowAddWeight(false)}
-        onSave={(w) => void addWeightEntry(w)}
+        onSave={(w, selectedDate) => void addWeightEntry(w, selectedDate)}
       />
     </View>
   );
@@ -771,6 +866,12 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 15,
     fontFamily: "Inter_700Bold",
+    // padding: 16,
+    paddingBottom: 0,
+  },
+  sectionTitleV2: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
     padding: 16,
     paddingBottom: 0,
   },
@@ -824,6 +925,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  loadMoreButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+  },
+  loadMoreText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
 
   chart: {
     flexDirection: "row",
@@ -895,6 +1005,10 @@ const styles = StyleSheet.create({
   modalCancel: { fontSize: 15, fontFamily: "Inter_400Regular" },
   modalSave: { fontSize: 15, fontFamily: "Inter_700Bold" },
   modalContent: { flex: 1, paddingHorizontal: 20, paddingTop: 24, gap: 20 },
+  inlinePickerWrap: {
+    marginTop: 10,
+    alignItems: "center",
+  },
   dateTimeRow: {
     flexDirection: "row",
     alignItems: "center",

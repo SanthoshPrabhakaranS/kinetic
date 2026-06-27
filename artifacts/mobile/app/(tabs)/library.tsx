@@ -165,9 +165,8 @@ export default function LibraryScreen() {
       >
         <View style={styles.titleRow}>
           <View style={styles.logoRow}>
-            <Feather name="zap" size={16} color={colors.primary} />
-            <Text style={[styles.appName, { color: colors.primary }]}>
-              KINETIC
+            <Text style={[styles.title, { color: colors.foreground }]}>
+              Library
             </Text>
           </View>
           <TouchableOpacity
@@ -298,6 +297,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
+  title: { fontSize: 28, fontFamily: "Inter_700Bold" },
   logoRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   appName: { fontSize: 18, fontFamily: "Inter_700Bold", letterSpacing: 2 },
   addBtn: {
