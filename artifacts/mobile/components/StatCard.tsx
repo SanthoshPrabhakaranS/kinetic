@@ -10,7 +10,12 @@ interface StatCardProps {
   accent?: boolean;
 }
 
-export function StatCard({ label, value, unit, accent = false }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  unit,
+  accent = false,
+}: StatCardProps) {
   const colors = useColors();
 
   return (
@@ -23,13 +28,22 @@ export function StatCard({ label, value, unit, accent = false }: StatCardProps) 
         },
       ]}
     >
-      <Text style={[styles.label, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text style={[styles.label, { color: colors.mutedForeground }]}>
+        {label}
+      </Text>
       <View style={styles.row}>
-        <Text style={[styles.value, { color: accent ? colors.primary : colors.foreground }]}>
+        <Text
+          style={[
+            styles.value,
+            { color: accent ? colors.primary : colors.foreground },
+          ]}
+        >
           {value}
         </Text>
         {unit && (
-          <Text style={[styles.unit, { color: colors.mutedForeground }]}>{unit}</Text>
+          <Text style={[styles.unit, { color: colors.mutedForeground }]}>
+            {unit}
+          </Text>
         )}
       </View>
     </View>
@@ -45,7 +59,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    fontSize: 11,
+    fontSize: 9,
     fontFamily: "Inter_500Medium",
     letterSpacing: 0.5,
     textTransform: "uppercase",
