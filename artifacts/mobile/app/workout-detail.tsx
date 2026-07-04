@@ -32,13 +32,37 @@ function formatDate(dateStr: string) {
   });
 }
 
+function formatDuration(
+  seconds?: number | null,
+  unit: "seconds" | "minutes" = "seconds",
+) {
+  if (seconds == null || Number.isNaN(seconds)) return "0s";
+  if (unit === "minutes") {
+    const minutes = seconds / 60;
+    const rounded = Math.round(minutes * 100) / 100;
+    return Number.isInteger(rounded) ? `${rounded}m` : `${rounded}m`;
+  }
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    const remaining = seconds % 60;
+    return remaining > 0 ? `${minutes}m ${remaining}s` : `${minutes}m`;
+  }
+  return `${seconds}s`;
+}
+
 function EntryCard({ entry }: { entry: WorkoutEntry }) {
   const colors = useColors();
 
+  const hasDuration = entry.sets.some((set) => set.duration != null);
   const maxWeight = Math.max(...entry.sets.map((s) => s.weight ?? 0));
   const totalReps = entry.sets.reduce((t, s) => t + (s.reps ?? 0), 0);
   const volume = entry.sets.reduce(
     (t, s) => t + (s.weight ?? 0) * (s.reps ?? 1),
+    0,
+  );
+  const totalDuration = entry.sets.reduce((t, s) => t + (s.duration ?? 0), 0);
+  const longestDuration = Math.max(
+    ...entry.sets.map((s) => s.duration ?? 0),
     0,
   );
 
@@ -60,66 +84,123 @@ function EntryCard({ entry }: { entry: WorkoutEntry }) {
         </View>
         <View style={styles.entryStats}>
           <Text style={[styles.entryVolume, { color: colors.primary }]}>
-            {Math.round(volume)} kg
+            {hasDuration
+              ? formatDuration(totalDuration, entry.sets[0]?.durationUnit)
+              : `${Math.round(volume)} kg`}
           </Text>
           <Text
             style={[styles.entryVolLabel, { color: colors.mutedForeground }]}
           >
-            volume
+            {hasDuration ? "total time" : "volume"}
           </Text>
         </View>
       </View>
 
       <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-      <View style={[styles.setsTable, { borderColor: colors.border }]}>
-        <View style={[styles.tableHead, { borderBottomColor: colors.border }]}>
-          <Text
-            style={[styles.th, { color: colors.mutedForeground, width: 36 }]}
-          >
-            SET
-          </Text>
-          <Text style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}>
-            WEIGHT
-          </Text>
-          <Text style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}>
-            REPS
-          </Text>
-          <Text style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}>
-            VOLUME
-          </Text>
-        </View>
-        {entry.sets.map((set) => (
+      {hasDuration ? (
+        <View style={[styles.setsTable, { borderColor: colors.border }]}>
           <View
-            key={set.setNumber}
-            style={[styles.tableRow, { borderBottomColor: colors.border }]}
+            style={[styles.tableHead, { borderBottomColor: colors.border }]}
           >
-            <View
-              style={[
-                styles.setNumBadge,
-                { backgroundColor: `${colors.primary}15` },
-              ]}
+            <Text
+              style={[styles.th, { color: colors.mutedForeground, width: 36 }]}
             >
-              <Text style={[styles.setNumText, { color: colors.primary }]}>
-                {set.setNumber}
-              </Text>
-            </View>
-            <Text style={[styles.td, { color: colors.foreground, flex: 1 }]}>
-              {set.weight != null ? `${set.weight} kg` : "—"}
-            </Text>
-            <Text style={[styles.td, { color: colors.foreground, flex: 1 }]}>
-              {set.reps != null ? `${set.reps}` : "—"}
+              SET
             </Text>
             <Text
-              style={[styles.td, { color: colors.mutedForeground, flex: 1 }]}
+              style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}
             >
-              {set.weight != null && set.reps != null
-                ? `${Math.round(set.weight * set.reps)} kg`
-                : "—"}
+              DURATION
+            </Text>
+            <Text
+              style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}
+            >
+              UNIT
             </Text>
           </View>
-        ))}
-      </View>
+          {entry.sets.map((set) => (
+            <View
+              key={set.setNumber}
+              style={[styles.tableRow, { borderBottomColor: colors.border }]}
+            >
+              <View
+                style={[
+                  styles.setNumBadge,
+                  { backgroundColor: `${colors.primary}15` },
+                ]}
+              >
+                <Text style={[styles.setNumText, { color: colors.primary }]}>
+                  {set.setNumber}
+                </Text>
+              </View>
+              <Text style={[styles.td, { color: colors.foreground, flex: 1 }]}>
+                {formatDuration(set.duration, set.durationUnit)}
+              </Text>
+              <Text style={[styles.td, { color: colors.foreground, flex: 1 }]}>
+                {set.durationUnit === "minutes" ? "min" : "sec"}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View style={[styles.setsTable, { borderColor: colors.border }]}>
+          <View
+            style={[styles.tableHead, { borderBottomColor: colors.border }]}
+          >
+            <Text
+              style={[styles.th, { color: colors.mutedForeground, width: 36 }]}
+            >
+              SET
+            </Text>
+            <Text
+              style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}
+            >
+              WEIGHT
+            </Text>
+            <Text
+              style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}
+            >
+              REPS
+            </Text>
+            <Text
+              style={[styles.th, { color: colors.mutedForeground, flex: 1 }]}
+            >
+              VOLUME
+            </Text>
+          </View>
+          {entry.sets.map((set) => (
+            <View
+              key={set.setNumber}
+              style={[styles.tableRow, { borderBottomColor: colors.border }]}
+            >
+              <View
+                style={[
+                  styles.setNumBadge,
+                  { backgroundColor: `${colors.primary}15` },
+                ]}
+              >
+                <Text style={[styles.setNumText, { color: colors.primary }]}>
+                  {set.setNumber}
+                </Text>
+              </View>
+              <Text style={[styles.td, { color: colors.foreground, flex: 1 }]}>
+                {set.weight != null ? `${set.weight} kg` : "—"}
+              </Text>
+              <Text style={[styles.td, { color: colors.foreground, flex: 1 }]}>
+                {set.reps != null ? `${set.reps}` : "—"}
+              </Text>
+              <Text
+                style={[styles.td, { color: colors.mutedForeground, flex: 1 }]}
+              >
+                {set.weight != null && set.reps != null
+                  ? `${Math.round(set.weight * set.reps)} kg`
+                  : "—"}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       <View style={styles.summaryRow}>
         <View style={styles.summaryItem}>
@@ -134,22 +215,26 @@ function EntryCard({ entry }: { entry: WorkoutEntry }) {
         </View>
         <View style={styles.summaryItem}>
           <Text style={[styles.summaryValue, { color: colors.foreground }]}>
-            {maxWeight} kg
+            {hasDuration
+              ? formatDuration(longestDuration, entry.sets[0]?.durationUnit)
+              : `${maxWeight} kg`}
           </Text>
           <Text
             style={[styles.summaryLabel, { color: colors.mutedForeground }]}
           >
-            Best set
+            {hasDuration ? "Longest set" : "Best set"}
           </Text>
         </View>
         <View style={styles.summaryItem}>
           <Text style={[styles.summaryValue, { color: colors.foreground }]}>
-            {totalReps}
+            {hasDuration
+              ? formatDuration(totalDuration, entry.sets[0]?.durationUnit)
+              : totalReps}
           </Text>
           <Text
             style={[styles.summaryLabel, { color: colors.mutedForeground }]}
           >
-            Total reps
+            {hasDuration ? "Total time" : "Total reps"}
           </Text>
         </View>
       </View>

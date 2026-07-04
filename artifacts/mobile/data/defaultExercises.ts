@@ -45,7 +45,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     name: "Push Ups",
     muscleGroup: "CHEST",
     equipment: "Bodyweight",
-    measurementUnit: "Reps Only",
+    measurementUnit: "Weight & Reps",
   },
   {
     id: generateId("Barbell Squat"),
@@ -110,7 +110,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     name: "Pull Ups",
     muscleGroup: "BACK",
     equipment: "Bodyweight",
-    measurementUnit: "Reps Only",
+    measurementUnit: "Weight & Reps",
   },
   {
     id: generateId("Weighted Pull Ups"),
@@ -208,7 +208,7 @@ export const DEFAULT_EXERCISES: Exercise[] = [
     name: "Crunches",
     muscleGroup: "CORE",
     equipment: "Bodyweight",
-    measurementUnit: "Reps Only",
+    measurementUnit: "Weight & Reps",
   },
   {
     id: generateId("Hip Thrust"),

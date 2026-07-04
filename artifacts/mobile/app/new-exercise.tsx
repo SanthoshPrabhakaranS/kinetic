@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -36,13 +37,16 @@ const EQUIPMENT_TYPES: Equipment[] = [
   "Cable",
 ];
 
-const MEASUREMENT_UNITS: { value: MeasurementUnit; label: string; sub: string }[] = [
+const MEASUREMENT_UNITS: {
+  value: MeasurementUnit;
+  label: string;
+  sub: string;
+}[] = [
   {
     value: "Weight & Reps",
     label: "Weight & Reps",
     sub: "Best for strength training",
   },
-  { value: "Reps Only", label: "Reps Only", sub: "Best for calisthenics" },
   {
     value: "Duration",
     label: "Duration",
@@ -69,24 +73,30 @@ export default function NewExerciseScreen() {
   const [name, setName] = useState("");
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | null>(null);
   const [equipment, setEquipment] = useState<Equipment | null>(null);
-  const [measurementUnit, setMeasurementUnit] = useState<MeasurementUnit>("Weight & Reps");
+  const [measurementUnit, setMeasurementUnit] =
+    useState<MeasurementUnit>("Weight & Reps");
   const [instructions, setInstructions] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const isValid = name.trim().length > 0 && muscleGroup !== null && equipment !== null;
+  const isValid =
+    name.trim().length > 0 && muscleGroup !== null && equipment !== null;
 
   const handleSave = async () => {
-    if (!isValid || !muscleGroup || !equipment) return;
+    if (!isValid || !muscleGroup || !equipment || saving) return;
     setSaving(true);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await addExercise({
-      name: name.trim(),
-      muscleGroup,
-      equipment,
-      measurementUnit,
-      instructions: instructions.trim() || undefined,
-    });
-    router.back();
+    try {
+      await addExercise({
+        name: name.trim(),
+        muscleGroup,
+        equipment,
+        measurementUnit,
+        instructions: instructions.trim() || undefined,
+      });
+      router.back();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -103,7 +113,12 @@ export default function NewExerciseScreen() {
           <Text style={[styles.label, { color: colors.mutedForeground }]}>
             EXERCISE NAME
           </Text>
-          <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.inputWrap,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <TextInput
               style={[styles.input, { color: colors.foreground }]}
               placeholder="e.g. Kettlebell Swing"
@@ -188,7 +203,9 @@ export default function NewExerciseScreen() {
                 <Feather
                   name="box"
                   size={16}
-                  color={equipment === eq ? colors.primary : colors.mutedForeground}
+                  color={
+                    equipment === eq ? colors.primary : colors.mutedForeground
+                  }
                 />
                 <Text
                   style={[
@@ -247,7 +264,9 @@ export default function NewExerciseScreen() {
                   >
                     {u.label}
                   </Text>
-                  <Text style={[styles.unitSub, { color: colors.mutedForeground }]}>
+                  <Text
+                    style={[styles.unitSub, { color: colors.mutedForeground }]}
+                  >
                     {u.sub}
                   </Text>
                 </View>
@@ -260,7 +279,9 @@ export default function NewExerciseScreen() {
                           ? colors.primary
                           : colors.border,
                       backgroundColor:
-                        measurementUnit === u.value ? colors.primary : "transparent",
+                        measurementUnit === u.value
+                          ? colors.primary
+                          : "transparent",
                     },
                   ]}
                 />
@@ -273,7 +294,12 @@ export default function NewExerciseScreen() {
           <Text style={[styles.label, { color: colors.mutedForeground }]}>
             INSTRUCTIONS
           </Text>
-          <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View
+            style={[
+              styles.inputWrap,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
             <TextInput
               style={[styles.textarea, { color: colors.foreground }]}
               placeholder="Describe the form or any specific cues..."
@@ -288,7 +314,12 @@ export default function NewExerciseScreen() {
         </View>
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 12, borderTopColor: colors.border }]}>
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: insets.bottom + 12, borderTopColor: colors.border },
+        ]}
+      >
         <TouchableOpacity
           style={[
             styles.saveBtn,
@@ -300,9 +331,15 @@ export default function NewExerciseScreen() {
           activeOpacity={0.85}
           disabled={!isValid || saving}
         >
-          <Feather name="plus" size={18} color={colors.primaryForeground} />
-          <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
-            Add to Library
+          {saving ? (
+            <ActivityIndicator size="small" color={colors.primaryForeground} />
+          ) : (
+            <Feather name="plus" size={18} color={colors.primaryForeground} />
+          )}
+          <Text
+            style={[styles.saveBtnText, { color: colors.primaryForeground }]}
+          >
+            {saving ? "Adding..." : "Add to Library"}
           </Text>
         </TouchableOpacity>
       </View>

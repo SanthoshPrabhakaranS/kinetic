@@ -17,8 +17,31 @@ function formatTime(iso: string) {
   });
 }
 
+function formatDuration(
+  seconds?: number | null,
+  unit: "seconds" | "minutes" = "seconds",
+) {
+  if (seconds == null || Number.isNaN(seconds)) return "0s";
+  if (unit === "minutes") {
+    const minutes = seconds / 60;
+    const rounded = Math.round(minutes * 100) / 100;
+    return Number.isInteger(rounded) ? `${rounded}m` : `${rounded}m`;
+  }
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    const remaining = seconds % 60;
+    return remaining > 0 ? `${minutes}m ${remaining}s` : `${minutes}m`;
+  }
+  return `${seconds}s`;
+}
+
 function formatSets(entry: WorkoutEntry) {
   if (entry.sets.length === 0) return "No sets";
+  if (entry.sets.some((set) => set.duration != null)) {
+    return entry.sets
+      .map((set) => formatDuration(set.duration, set.durationUnit))
+      .join(", ");
+  }
   const weights = entry.sets
     .filter((s) => s.weight != null)
     .map((s) => s.weight);
@@ -55,7 +78,11 @@ export function LogEntryCard({ entry, onPress }: LogEntryCardProps) {
         <Text style={[styles.time, { color: colors.mutedForeground }]}>
           {formatTime(entry.timestamp)}
         </Text>
-        <Feather name="chevron-right" size={14} color={colors.mutedForeground} />
+        <Feather
+          name="chevron-right"
+          size={14}
+          color={colors.mutedForeground}
+        />
       </View>
     </TouchableOpacity>
   );

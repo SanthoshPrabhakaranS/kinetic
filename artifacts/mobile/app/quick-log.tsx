@@ -9,6 +9,7 @@ import React, {
   useState,
 } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   Platform,
@@ -24,14 +25,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NumberPad } from "@/components/NumberPad";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
-import type { Exercise } from "@/types/workout";
+import type { Exercise, SetEntry } from "@/types/workout";
 
-type ActiveField = "weight" | "reps";
+type ActiveField = "weight" | "reps" | "duration";
+
+type DurationUnit = "seconds" | "minutes";
 
 interface SetRow {
   id: string;
   weight: string;
   reps: string;
+  duration: string;
+  durationUnit: DurationUnit;
 }
 
 function makeSet(weight = "0", reps = "8"): SetRow {
@@ -39,6 +44,21 @@ function makeSet(weight = "0", reps = "8"): SetRow {
     id: Math.random().toString(36).substr(2, 9),
     weight,
     reps,
+    duration: "30",
+    durationUnit: "seconds",
+  };
+}
+
+function makeDurationSet(
+  duration = "30",
+  durationUnit: DurationUnit = "seconds",
+): SetRow {
+  return {
+    id: Math.random().toString(36).substr(2, 9),
+    weight: "0",
+    reps: "0",
+    duration,
+    durationUnit,
   };
 }
 
@@ -48,6 +68,55 @@ function applyKey(current: string, key: string): string {
   if (current === "0") return key;
   if (current.length >= 6) return current;
   return current + key;
+}
+
+function durationToSeconds(value: string, unit: DurationUnit) {
+  const parsed = parseFloat(value);
+  if (Number.isNaN(parsed) || parsed <= 0) return undefined;
+  if (unit === "minutes") {
+    return Math.round(parsed * 60);
+  }
+  return Math.round(parsed);
+}
+
+function secondsToDurationInput(seconds: number, unit: DurationUnit) {
+  const converted = unit === "minutes" ? seconds / 60 : seconds;
+  const rounded = Math.round(converted * 100) / 100;
+  return Number.isInteger(rounded)
+    ? rounded.toString()
+    : rounded.toFixed(2).replace(/\.0+$/, "").replace(/0+$/, "");
+}
+
+function convertDurationInput(
+  value: string,
+  fromUnit: DurationUnit,
+  toUnit: DurationUnit,
+) {
+  const seconds = durationToSeconds(value, fromUnit);
+  if (seconds == null) return value;
+  return secondsToDurationInput(seconds, toUnit);
+}
+
+function formatDuration(seconds?: number | null) {
+  if (seconds == null || Number.isNaN(seconds)) return "0s";
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    const remaining = seconds % 60;
+    return remaining > 0 ? `${minutes}m ${remaining}s` : `${minutes}m`;
+  }
+  return `${seconds}s`;
+}
+
+function shiftDurationValue(
+  value: string,
+  unit: DurationUnit,
+  deltaSeconds: number,
+) {
+  const currentSeconds = durationToSeconds(value, unit) ?? 0;
+  return secondsToDurationInput(
+    Math.max(0, currentSeconds + deltaSeconds),
+    unit,
+  );
 }
 
 export default function QuickLogScreen() {
@@ -69,6 +138,16 @@ export default function QuickLogScreen() {
   const [activeSetId, setActiveSetId] = useState<string>(sets[0]!.id);
   const [activeField, setActiveField] = useState<ActiveField>("weight");
   const [saved, setSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [durationRunning, setDurationRunning] = useState(false);
+  const [defaultDurationUnit, setDefaultDurationUnit] =
+    useState<DurationUnit>("seconds");
+  const durationStartedAtRef = useRef<number | null>(null);
+  const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
+    null,
+  );
+
+  const isDurationExercise = selectedExercise?.measurementUnit === "Duration";
 
   const lastEntry = useMemo(
     () =>
@@ -87,16 +166,52 @@ export default function QuickLogScreen() {
 
   useEffect(() => {
     if (lastEntry && lastEntry.sets.length > 0) {
+      const lastDurationUnit =
+        lastEntry.sets.find((set) => set.durationUnit)?.durationUnit ??
+        defaultDurationUnit;
+      setDefaultDurationUnit(lastDurationUnit);
       const prefilled = lastEntry.sets.map((s) =>
-        makeSet(
-          s.weight != null ? s.weight.toString() : "0",
-          s.reps != null ? s.reps.toString() : "8",
-        ),
+        isDurationExercise
+          ? makeDurationSet(
+              s.duration != null ? s.duration.toString() : "30",
+              s.durationUnit ?? lastDurationUnit,
+            )
+          : makeSet(
+              s.weight != null ? s.weight.toString() : "0",
+              s.reps != null ? s.reps.toString() : "8",
+            ),
       );
       setSets(prefilled);
       setActiveSetId(prefilled[0]!.id);
     }
-  }, [lastEntry]);
+  }, [isDurationExercise, lastEntry]);
+
+  useEffect(() => {
+    if (!isDurationExercise) {
+      setDurationRunning(false);
+      durationStartedAtRef.current = null;
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+        durationIntervalRef.current = null;
+      }
+      return;
+    }
+
+    setSets((prev) => {
+      if (prev.length > 0 && prev[0]?.duration != null) return prev;
+      return [makeDurationSet("30", defaultDurationUnit)];
+    });
+    setActiveSetId((prev) => prev ?? sets[0]!.id);
+    setActiveField("duration");
+  }, [defaultDurationUnit, isDurationExercise]);
+
+  useEffect(() => {
+    return () => {
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+      }
+    };
+  }, []);
 
   const handleNumPad = useCallback(
     (key: string) => {
@@ -105,7 +220,9 @@ export default function QuickLogScreen() {
           if (s.id !== activeSetId) return s;
           if (activeField === "weight")
             return { ...s, weight: applyKey(s.weight, key) };
-          return { ...s, reps: applyKey(s.reps, key) };
+          if (activeField === "reps")
+            return { ...s, reps: applyKey(s.reps, key) };
+          return { ...s, duration: applyKey(s.duration, key) };
         }),
       );
     },
@@ -121,10 +238,15 @@ export default function QuickLogScreen() {
   const handleAddSet = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const lastSet = sets[sets.length - 1];
-    const newSet = makeSet(lastSet?.weight ?? "0", lastSet?.reps ?? "8");
+    const newSet = isDurationExercise
+      ? makeDurationSet(
+          lastSet?.duration ?? "30",
+          lastSet?.durationUnit ?? defaultDurationUnit,
+        )
+      : makeSet(lastSet?.weight ?? "0", lastSet?.reps ?? "8");
     setSets((prev) => [...prev, newSet]);
     setActiveSetId(newSet.id);
-    setActiveField("weight");
+    setActiveField(isDurationExercise ? "duration" : "weight");
   };
 
   const handleDeleteSet = (setId: string) => {
@@ -156,37 +278,151 @@ export default function QuickLogScreen() {
     setSets((old) =>
       old.map((s) =>
         s.id === activeSetId
-          ? { ...s, weight: prev.weight, reps: prev.reps }
+          ? isDurationExercise
+            ? { ...s, duration: prev.duration, durationUnit: prev.durationUnit }
+            : { ...s, weight: prev.weight, reps: prev.reps }
           : s,
       ),
     );
   };
 
+  const handleToggleDurationTimer = () => {
+    if (!isDurationExercise) return;
+
+    const activeDuration = sets.find((s) => s.id === activeSetId);
+    if (!activeDuration) return;
+
+    if (durationRunning) {
+      if (durationIntervalRef.current) {
+        clearInterval(durationIntervalRef.current);
+        durationIntervalRef.current = null;
+      }
+      durationStartedAtRef.current = null;
+      setDurationRunning(false);
+      return;
+    }
+
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const currentSeconds =
+      durationToSeconds(activeDuration.duration, activeDuration.durationUnit) ??
+      0;
+    durationStartedAtRef.current = Date.now() - currentSeconds * 1000;
+    setDurationRunning(true);
+    durationIntervalRef.current = setInterval(() => {
+      const startedAt = durationStartedAtRef.current;
+      if (!startedAt) return;
+      const nextSeconds = Math.max(
+        0,
+        Math.floor((Date.now() - startedAt) / 1000),
+      );
+      setSets((prev) =>
+        prev.map((item) =>
+          item.id === activeSetId
+            ? {
+                ...item,
+                duration: secondsToDurationInput(
+                  nextSeconds,
+                  item.durationUnit ?? "seconds",
+                ),
+              }
+            : item,
+        ),
+      );
+    }, 1000);
+  };
+
+  const handleResetDurationTimer = () => {
+    if (!isDurationExercise) return;
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    durationStartedAtRef.current = null;
+    setDurationRunning(false);
+    setSets((prev) =>
+      prev.map((item) =>
+        item.id === activeSetId
+          ? {
+              ...item,
+              duration: "30",
+              durationUnit: defaultDurationUnit,
+            }
+          : item,
+      ),
+    );
+  };
+
+  const updateDurationUnit = (setId: string, unit: DurationUnit) => {
+    setDefaultDurationUnit(unit);
+    setSets((prev) =>
+      prev.map((item) =>
+        item.id === setId
+          ? {
+              ...item,
+              duration: convertDurationInput(
+                item.duration,
+                item.durationUnit,
+                unit,
+              ),
+              durationUnit: unit,
+            }
+          : item,
+      ),
+    );
+  };
+
+  const shiftActiveDuration = (deltaSeconds: number) => {
+    setSets((prev) =>
+      prev.map((item) => {
+        if (item.id !== activeSetId) return item;
+        const unit = item.durationUnit ?? defaultDurationUnit;
+        return {
+          ...item,
+          duration: shiftDurationValue(item.duration, unit, deltaSeconds),
+        };
+      }),
+    );
+  };
+
   const handleSave = async () => {
-    if (!selectedExercise || sets.length === 0) return;
-    setSaved(true);
+    if (!selectedExercise || sets.length === 0 || isSaving || saved) return;
+    setIsSaving(true);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-    const setsData = sets.map((s, i) => ({
-      setNumber: i + 1,
-      weight: parseFloat(s.weight) || undefined,
-      reps: parseInt(s.reps) || undefined,
-    }));
-
-    await addWorkoutEntry(
-      {
-        exerciseId: selectedExercise.id,
-        exerciseName: selectedExercise.name,
-        muscleGroup: selectedExercise.muscleGroup,
-        equipment: selectedExercise.equipment,
-        sets: setsData,
-      },
-      typeof selectedDate === "string" && selectedDate.trim()
-        ? selectedDate
-        : undefined,
+    const setsData: SetEntry[] = sets.map((s, i) =>
+      isDurationExercise
+        ? {
+            setNumber: i + 1,
+            duration: durationToSeconds(s.duration, s.durationUnit),
+            durationUnit: s.durationUnit,
+          }
+        : {
+            setNumber: i + 1,
+            weight: parseFloat(s.weight) || undefined,
+            reps: parseInt(s.reps) || undefined,
+          },
     );
 
-    setTimeout(() => router.back(), 500);
+    try {
+      await addWorkoutEntry(
+        {
+          exerciseId: selectedExercise.id,
+          exerciseName: selectedExercise.name,
+          muscleGroup: selectedExercise.muscleGroup,
+          equipment: selectedExercise.equipment,
+          sets: setsData,
+        },
+        typeof selectedDate === "string" && selectedDate.trim()
+          ? selectedDate
+          : undefined,
+      );
+
+      setSaved(true);
+      setTimeout(() => router.back(), 500);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const filteredExercises = exercises.filter(
@@ -221,20 +457,30 @@ export default function QuickLogScreen() {
           <TouchableOpacity
             style={[
               styles.saveHeaderBtn,
-              { backgroundColor: saved ? colors.muted : colors.primary },
+              {
+                backgroundColor:
+                  saved || isSaving ? colors.muted : colors.primary,
+              },
             ]}
             onPress={handleSave}
-            disabled={saved}
+            disabled={saved || isSaving}
             activeOpacity={0.8}
           >
-            <Text
-              style={[
-                styles.saveHeaderText,
-                { color: colors.primaryForeground },
-              ]}
-            >
-              {saved ? "Saved!" : "Save"}
-            </Text>
+            {isSaving ? (
+              <ActivityIndicator
+                size="small"
+                color={colors.primaryForeground}
+              />
+            ) : (
+              <Text
+                style={[
+                  styles.saveHeaderText,
+                  { color: colors.primaryForeground },
+                ]}
+              >
+                {saved ? "Saved!" : "Save"}
+              </Text>
+            )}
           </TouchableOpacity>
         )}
       </View>
@@ -308,14 +554,394 @@ export default function QuickLogScreen() {
               ]}
             >
               Last session:
-              {lastEntry.sets
-                .map((s) => `${s.weight ?? "—"}kg × ${s.reps ?? "—"}`)
-                .join(", ")}
+              {selectedExercise?.measurementUnit === "Duration"
+                ? lastEntry.sets
+                    .map((s) => formatDuration(s.duration))
+                    .join(", ")
+                : lastEntry.sets
+                    .map((s) => `${s.weight ?? "—"}kg × ${s.reps ?? "—"}`)
+                    .join(", ")}
             </Text>
           </View>
         )}
 
-        {selectedExercise && (
+        {selectedExercise && isDurationExercise && (
+          <>
+            <View style={styles.setsHeader}>
+              <Text style={[styles.setsTitle, { color: colors.foreground }]}>
+                DURATION
+              </Text>
+              <Text
+                style={[styles.setsCount, { color: colors.mutedForeground }]}
+              >
+                {sets.length} {sets.length === 1 ? "interval" : "intervals"}
+              </Text>
+            </View>
+
+            <View
+              style={[
+                styles.setsTable,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <View
+                style={[styles.tableHead, { borderBottomColor: colors.border }]}
+              >
+                <Text style={[styles.thSet, { color: colors.mutedForeground }]}>
+                  SET
+                </Text>
+                <Text
+                  style={[styles.thField, { color: colors.mutedForeground }]}
+                >
+                  DURATION
+                </Text>
+                <Text
+                  style={[styles.thField, { color: colors.mutedForeground }]}
+                >
+                  UNIT
+                </Text>
+                <View style={styles.thDel} />
+              </View>
+
+              {sets.map((set, index) => {
+                const isActive = set.id === activeSetId;
+                return (
+                  <View
+                    key={set.id}
+                    style={[
+                      styles.tableRow,
+                      index < sets.length - 1 && {
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.border,
+                      },
+                      isActive && { backgroundColor: `${colors.primary}08` },
+                    ]}
+                  >
+                    <View style={styles.setNumBox}>
+                      <Text
+                        style={[
+                          styles.setNum,
+                          {
+                            color: isActive
+                              ? colors.primary
+                              : colors.mutedForeground,
+                          },
+                        ]}
+                      >
+                        {index + 1}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.cellBtn,
+                        isActive &&
+                          activeField === "duration" && {
+                            backgroundColor: `${colors.primary}20`,
+                            borderColor: colors.primary,
+                          },
+                        { borderColor: colors.border },
+                      ]}
+                      onPress={() => handleActivate(set.id, "duration")}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.cellValue,
+                          {
+                            color:
+                              isActive && activeField === "duration"
+                                ? colors.primary
+                                : colors.foreground,
+                          },
+                        ]}
+                      >
+                        {set.duration}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.unitCell}>
+                      <TouchableOpacity
+                        style={[
+                          styles.unitPill,
+                          {
+                            backgroundColor:
+                              set.durationUnit === "seconds"
+                                ? `${colors.primary}20`
+                                : colors.muted,
+                            borderColor:
+                              set.durationUnit === "seconds"
+                                ? colors.primary
+                                : colors.border,
+                          },
+                        ]}
+                        onPress={() => updateDurationUnit(set.id, "seconds")}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.unitPillText,
+                            {
+                              color:
+                                set.durationUnit === "seconds"
+                                  ? colors.primary
+                                  : colors.foreground,
+                            },
+                          ]}
+                        >
+                          sec
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.unitPill,
+                          {
+                            backgroundColor:
+                              set.durationUnit === "minutes"
+                                ? `${colors.primary}20`
+                                : colors.muted,
+                            borderColor:
+                              set.durationUnit === "minutes"
+                                ? colors.primary
+                                : colors.border,
+                          },
+                        ]}
+                        onPress={() => updateDurationUnit(set.id, "minutes")}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.unitPillText,
+                            {
+                              color:
+                                set.durationUnit === "minutes"
+                                  ? colors.primary
+                                  : colors.foreground,
+                            },
+                          ]}
+                        >
+                          min
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.delBtn}
+                      onPress={() => handleDeleteSet(set.id)}
+                      hitSlop={8}
+                      disabled={sets.length <= 1}
+                    >
+                      <Feather
+                        name="x"
+                        size={14}
+                        color={
+                          sets.length <= 1
+                            ? "transparent"
+                            : colors.mutedForeground
+                        }
+                      />
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+
+              <TouchableOpacity
+                style={[styles.addSetRow, { borderTopColor: colors.border }]}
+                onPress={handleAddSet}
+                activeOpacity={0.7}
+              >
+                <Feather name="plus" size={16} color={colors.primary} />
+                <Text style={[styles.addSetText, { color: colors.primary }]}>
+                  Add Interval
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.durationTools}>
+              <TouchableOpacity
+                style={[
+                  styles.durationToolBtn,
+                  {
+                    backgroundColor: durationRunning
+                      ? colors.primary
+                      : colors.card,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={handleToggleDurationTimer}
+                activeOpacity={0.8}
+              >
+                <Feather
+                  name={durationRunning ? "pause" : "play"}
+                  size={14}
+                  color={
+                    durationRunning
+                      ? colors.primaryForeground
+                      : colors.foreground
+                  }
+                />
+                <Text
+                  style={[
+                    styles.durationToolText,
+                    {
+                      color: durationRunning
+                        ? colors.primaryForeground
+                        : colors.foreground,
+                    },
+                  ]}
+                >
+                  {durationRunning ? "Stop Timer" : "Start Timer"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.durationToolBtn,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+                onPress={handleResetDurationTimer}
+                activeOpacity={0.8}
+              >
+                <Feather
+                  name="rotate-ccw"
+                  size={14}
+                  color={colors.foreground}
+                />
+                <Text
+                  style={[
+                    styles.durationToolText,
+                    { color: colors.foreground },
+                  ]}
+                >
+                  Reset
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.quickRow}>
+              <Text
+                style={[styles.quickLabel, { color: colors.mutedForeground }]}
+              >
+                Quick adjust interval {activeSetIndex + 1}:
+              </Text>
+              <View style={styles.quickBtns}>
+                <TouchableOpacity
+                  style={[
+                    styles.quickBtn,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  onPress={() => shiftActiveDuration(10)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[styles.quickBtnText, { color: colors.foreground }]}
+                  >
+                    +10s
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.quickBtn,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  onPress={() => shiftActiveDuration(60)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[styles.quickBtnText, { color: colors.foreground }]}
+                  >
+                    +1m
+                  </Text>
+                </TouchableOpacity>
+                {activeSetIndex > 0 && (
+                  <TouchableOpacity
+                    style={[
+                      styles.quickBtn,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={handleCopyPrev}
+                    activeOpacity={0.7}
+                  >
+                    <Feather name="copy" size={12} color={colors.foreground} />
+                    <Text
+                      style={[
+                        styles.quickBtnText,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      Copy prev
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.numPadSection}>
+              <View style={styles.numPadLabel}>
+                <Text
+                  style={[
+                    styles.numPadTitle,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Set {activeSetIndex + 1} · Duration
+                </Text>
+                <Text style={[styles.numPadValue, { color: colors.primary }]}>
+                  {activeSet?.duration ?? "30"}
+                </Text>
+              </View>
+              <NumberPad onPress={handleNumPad} />
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.saveBtn,
+                {
+                  backgroundColor:
+                    saved || isSaving ? colors.muted : colors.primary,
+                },
+              ]}
+              onPress={handleSave}
+              activeOpacity={0.85}
+              disabled={saved || isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.primaryForeground}
+                />
+              ) : (
+                <Feather
+                  name={saved ? "check-circle" : "check"}
+                  size={18}
+                  color={colors.primaryForeground}
+                />
+              )}
+              <Text
+                style={[
+                  styles.saveBtnText,
+                  { color: colors.primaryForeground },
+                ]}
+              >
+                {isSaving
+                  ? "Saving..."
+                  : saved
+                    ? "Saved!"
+                    : `Save ${sets.length} ${sets.length === 1 ? "Interval" : "Intervals"}`}
+              </Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {selectedExercise && !isDurationExercise && (
           <>
             <View style={styles.setsHeader}>
               <Text style={[styles.setsTitle, { color: colors.foreground }]}>
@@ -560,26 +1186,38 @@ export default function QuickLogScreen() {
             <TouchableOpacity
               style={[
                 styles.saveBtn,
-                { backgroundColor: saved ? colors.muted : colors.primary },
+                {
+                  backgroundColor:
+                    saved || isSaving ? colors.muted : colors.primary,
+                },
               ]}
               onPress={handleSave}
               activeOpacity={0.85}
-              disabled={saved}
+              disabled={saved || isSaving}
             >
-              <Feather
-                name={saved ? "check-circle" : "check"}
-                size={18}
-                color={colors.primaryForeground}
-              />
+              {isSaving ? (
+                <ActivityIndicator
+                  size="small"
+                  color={colors.primaryForeground}
+                />
+              ) : (
+                <Feather
+                  name={saved ? "check-circle" : "check"}
+                  size={18}
+                  color={colors.primaryForeground}
+                />
+              )}
               <Text
                 style={[
                   styles.saveBtnText,
                   { color: colors.primaryForeground },
                 ]}
               >
-                {saved
-                  ? "Saved!"
-                  : `Save ${sets.length} ${sets.length === 1 ? "Set" : "Sets"}`}
+                {isSaving
+                  ? "Saving..."
+                  : saved
+                    ? "Saved!"
+                    : `Save ${sets.length} ${sets.length === 1 ? "Set" : "Sets"}`}
               </Text>
             </TouchableOpacity>
           </>
@@ -794,6 +1432,20 @@ const styles = StyleSheet.create({
   },
   cellValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
   delBtn: { width: 28, alignItems: "center", justifyContent: "center" },
+  unitCell: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+  },
+  unitPill: {
+    flex: 1,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unitPillText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   addSetRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -817,6 +1469,22 @@ const styles = StyleSheet.create({
   },
   quickBtnText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   numPadSection: { gap: 10 },
+  durationTools: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  durationToolBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 6,
+  },
+  durationToolText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   numPadLabel: {
     flexDirection: "row",
     justifyContent: "space-between",

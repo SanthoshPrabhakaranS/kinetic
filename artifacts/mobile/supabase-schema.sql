@@ -37,6 +37,17 @@ create table if not exists exercises (
   updated_at timestamp with time zone default now() not null
 );
 
+update exercises
+set measurement_unit = 'Weight & Reps'
+where measurement_unit = 'Reps Only';
+
+alter table exercises
+  drop constraint if exists exercises_measurement_unit_check;
+
+alter table exercises
+  add constraint exercises_measurement_unit_check
+  check (measurement_unit in ('Weight & Reps', 'Duration'));
+
 drop trigger if exists set_exercises_updated_at on exercises;
 
 create trigger set_exercises_updated_at
@@ -88,8 +99,13 @@ create table if not exists workout_sets (
   weight numeric,
   reps integer,
   duration integer,
+  duration_unit text not null default 'seconds',
   inserted_at timestamp with time zone default now() not null
 );
+
+update workout_sets
+set duration_unit = 'seconds'
+where duration_unit is null;
 
 create table if not exists routines (
   id text primary key,
