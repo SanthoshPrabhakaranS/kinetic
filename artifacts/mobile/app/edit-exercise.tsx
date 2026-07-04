@@ -1,8 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,43 +19,68 @@ import { useColors } from "@/hooks/useColors";
 import type { Equipment, MeasurementUnit, MuscleGroup } from "@/types/workout";
 
 const MUSCLE_GROUPS: MuscleGroup[] = [
-  "CHEST", "BACK", "LEGS", "SHOULDERS", "ARMS", "CORE", "GLUTES", "CARDIO",
+  "CHEST",
+  "BACK",
+  "LEGS",
+  "SHOULDERS",
+  "ARMS",
+  "CORE",
+  "GLUTES",
+  "CARDIO",
 ];
 
 const EQUIPMENT_TYPES: Equipment[] = [
-  "Barbell", "Dumbbell", "Machine", "Bodyweight", "Kettlebell", "Cable",
+  "Barbell",
+  "Dumbbell",
+  "Machine",
+  "Bodyweight",
+  "Kettlebell",
+  "Cable",
 ];
 
 const MEASUREMENT_UNITS: { value: MeasurementUnit; label: string }[] = [
   { value: "Weight & Reps", label: "Weight & Reps" },
-  { value: "Reps Only", label: "Reps Only" },
   { value: "Duration", label: "Duration" },
 ];
 
 const MUSCLE_LABEL: Record<MuscleGroup, string> = {
-  CHEST: "Chest", BACK: "Back", LEGS: "Legs", SHOULDERS: "Shoulders",
-  ARMS: "Arms", CORE: "Core", GLUTES: "Glutes", CARDIO: "Cardio",
+  CHEST: "Chest",
+  BACK: "Back",
+  LEGS: "Legs",
+  SHOULDERS: "Shoulders",
+  ARMS: "Arms",
+  CORE: "Core",
+  GLUTES: "Glutes",
+  CARDIO: "Cardio",
 };
 
 export default function EditExerciseScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { exerciseId } = useLocalSearchParams<{ exerciseId: string }>();
-  const { exercises, updateExercise } = useWorkout();
+  const { exercises, updateExercise, deleteExercise } = useWorkout();
 
   const exercise = exercises.find((e) => e.id === exerciseId);
 
   const [name, setName] = useState(exercise?.name ?? "");
-  const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | null>(exercise?.muscleGroup ?? null);
-  const [equipment, setEquipment] = useState<Equipment | null>(exercise?.equipment ?? null);
-  const [measurementUnit, setMeasurementUnit] = useState<MeasurementUnit>(
-    exercise?.measurementUnit ?? "Weight & Reps"
+  const [muscleGroup, setMuscleGroup] = useState<MuscleGroup | null>(
+    exercise?.muscleGroup ?? null,
   );
-  const [instructions, setInstructions] = useState(exercise?.instructions ?? "");
+  const [equipment, setEquipment] = useState<Equipment | null>(
+    exercise?.equipment ?? null,
+  );
+  const [measurementUnit, setMeasurementUnit] = useState<MeasurementUnit>(
+    exercise?.measurementUnit ?? "Weight & Reps",
+  );
+  const [instructions, setInstructions] = useState(
+    exercise?.instructions ?? "",
+  );
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const isReadOnly = !exercise?.isCustom;
-  const isValid = name.trim().length > 0 && muscleGroup !== null && equipment !== null;
+  const isValid =
+    name.trim().length > 0 && muscleGroup !== null && equipment !== null;
 
   if (!exercise) {
     return (
@@ -66,38 +93,114 @@ export default function EditExerciseScreen() {
   }
 
   const handleSave = async () => {
-    if (!isValid || !muscleGroup || !equipment || isReadOnly) return;
+    if (!isValid || !muscleGroup || !equipment || isReadOnly || saving) return;
     setSaving(true);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await updateExercise(exerciseId, {
-      name: name.trim(),
-      muscleGroup,
-      equipment,
-      measurementUnit,
-      instructions: instructions.trim() || undefined,
-    });
-    router.back();
+    try {
+      await updateExercise(exerciseId, {
+        name: name.trim(),
+        muscleGroup,
+        equipment,
+        measurementUnit,
+        instructions: instructions.trim() || undefined,
+      });
+      router.back();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = () => {
+    if (isReadOnly) return;
+
+    Alert.alert(
+      "Delete Exercise",
+      "This will remove the exercise from your library and any routines that use it.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              setDeleting(true);
+              void Haptics.notificationAsync(
+                Haptics.NotificationFeedbackType.Warning,
+              );
+              await deleteExercise(exerciseId);
+              setDeleting(false);
+              router.back();
+            })();
+          },
+        },
+      ],
+    );
   };
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      {!isReadOnly && (
+        <Stack.Screen
+          options={{
+            headerRight: () => (
+              <TouchableOpacity
+                onPress={handleDelete}
+                activeOpacity={0.75}
+                hitSlop={10}
+                style={styles.headerDeleteBtn}
+                disabled={deleting}
+              >
+                <Feather
+                  name="trash-2"
+                  size={18}
+                  color={colors.destructive ?? "#FF6B6B"}
+                />
+              </TouchableOpacity>
+            ),
+          }}
+        />
+      )}
+
       {isReadOnly && (
-        <View style={[styles.readOnlyBanner, { backgroundColor: `${colors.primary}15`, borderBottomColor: `${colors.primary}30` }]}>
+        <View
+          style={[
+            styles.readOnlyBanner,
+            {
+              backgroundColor: `${colors.primary}15`,
+              borderBottomColor: `${colors.primary}30`,
+            },
+          ]}
+        >
           <Feather name="lock" size={13} color={colors.primary} />
           <Text style={[styles.readOnlyText, { color: colors.primary }]}>
-            Built-in exercises are read-only. Duplicate it to create a custom version.
+            Built-in exercises are read-only. Duplicate it to create a custom
+            version.
           </Text>
         </View>
       )}
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 20 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: insets.bottom + 20 },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>EXERCISE NAME</Text>
-          <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border, opacity: isReadOnly ? 0.5 : 1 }]}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>
+            EXERCISE NAME
+          </Text>
+          <View
+            style={[
+              styles.inputWrap,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                opacity: isReadOnly ? 0.5 : 1,
+              },
+            ]}
+          >
             <TextInput
               style={[styles.input, { color: colors.foreground }]}
               value={name}
@@ -109,7 +212,9 @@ export default function EditExerciseScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>MUSCLE GROUP</Text>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>
+            MUSCLE GROUP
+          </Text>
           <View style={[styles.chipGrid, { opacity: isReadOnly ? 0.5 : 1 }]}>
             {MUSCLE_GROUPS.map((mg) => (
               <TouchableOpacity
@@ -117,8 +222,10 @@ export default function EditExerciseScreen() {
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: muscleGroup === mg ? colors.primary : colors.card,
-                    borderColor: muscleGroup === mg ? colors.primary : colors.border,
+                    backgroundColor:
+                      muscleGroup === mg ? colors.primary : colors.card,
+                    borderColor:
+                      muscleGroup === mg ? colors.primary : colors.border,
                   },
                 ]}
                 onPress={() => {
@@ -128,7 +235,17 @@ export default function EditExerciseScreen() {
                 }}
                 activeOpacity={isReadOnly ? 1 : 0.7}
               >
-                <Text style={[styles.chipText, { color: muscleGroup === mg ? colors.primaryForeground : colors.mutedForeground }]}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    {
+                      color:
+                        muscleGroup === mg
+                          ? colors.primaryForeground
+                          : colors.mutedForeground,
+                    },
+                  ]}
+                >
                   {MUSCLE_LABEL[mg]}
                 </Text>
               </TouchableOpacity>
@@ -137,7 +254,9 @@ export default function EditExerciseScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>EQUIPMENT</Text>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>
+            EQUIPMENT
+          </Text>
           <View style={[styles.chipGrid, { opacity: isReadOnly ? 0.5 : 1 }]}>
             {EQUIPMENT_TYPES.map((eq) => (
               <TouchableOpacity
@@ -145,8 +264,10 @@ export default function EditExerciseScreen() {
                 style={[
                   styles.chip,
                   {
-                    backgroundColor: equipment === eq ? colors.primary : colors.card,
-                    borderColor: equipment === eq ? colors.primary : colors.border,
+                    backgroundColor:
+                      equipment === eq ? colors.primary : colors.card,
+                    borderColor:
+                      equipment === eq ? colors.primary : colors.border,
                   },
                 ]}
                 onPress={() => {
@@ -156,7 +277,17 @@ export default function EditExerciseScreen() {
                 }}
                 activeOpacity={isReadOnly ? 1 : 0.7}
               >
-                <Text style={[styles.chipText, { color: equipment === eq ? colors.primaryForeground : colors.mutedForeground }]}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    {
+                      color:
+                        equipment === eq
+                          ? colors.primaryForeground
+                          : colors.mutedForeground,
+                    },
+                  ]}
+                >
                   {eq}
                 </Text>
               </TouchableOpacity>
@@ -165,7 +296,9 @@ export default function EditExerciseScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>MEASUREMENT</Text>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>
+            MEASUREMENT
+          </Text>
           <View style={[styles.unitRow, { opacity: isReadOnly ? 0.5 : 1 }]}>
             {MEASUREMENT_UNITS.map((u) => (
               <TouchableOpacity
@@ -173,8 +306,14 @@ export default function EditExerciseScreen() {
                 style={[
                   styles.unitBtn,
                   {
-                    backgroundColor: measurementUnit === u.value ? colors.primary : colors.card,
-                    borderColor: measurementUnit === u.value ? colors.primary : colors.border,
+                    backgroundColor:
+                      measurementUnit === u.value
+                        ? colors.primary
+                        : colors.card,
+                    borderColor:
+                      measurementUnit === u.value
+                        ? colors.primary
+                        : colors.border,
                     flex: 1,
                   },
                 ]}
@@ -184,7 +323,17 @@ export default function EditExerciseScreen() {
                 }}
                 activeOpacity={isReadOnly ? 1 : 0.7}
               >
-                <Text style={[styles.unitBtnText, { color: measurementUnit === u.value ? colors.primaryForeground : colors.mutedForeground }]}>
+                <Text
+                  style={[
+                    styles.unitBtnText,
+                    {
+                      color:
+                        measurementUnit === u.value
+                          ? colors.primaryForeground
+                          : colors.mutedForeground,
+                    },
+                  ]}
+                >
                   {u.label}
                 </Text>
               </TouchableOpacity>
@@ -193,8 +342,19 @@ export default function EditExerciseScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>INSTRUCTIONS</Text>
-          <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border, opacity: isReadOnly ? 0.5 : 1 }]}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>
+            INSTRUCTIONS
+          </Text>
+          <View
+            style={[
+              styles.inputWrap,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                opacity: isReadOnly ? 0.5 : 1,
+              },
+            ]}
+          >
             <TextInput
               style={[styles.textarea, { color: colors.foreground }]}
               placeholder="Form cues and tips..."
@@ -211,16 +371,44 @@ export default function EditExerciseScreen() {
       </ScrollView>
 
       {!isReadOnly && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 12, borderTopColor: colors.border }]}>
+        <View
+          style={[
+            styles.footer,
+            {
+              paddingBottom: insets.bottom + 12,
+              borderTopColor: colors.border,
+            },
+          ]}
+        >
           <TouchableOpacity
-            style={[styles.saveBtn, { backgroundColor: isValid ? colors.primary : `${colors.primary}40` }]}
+            style={[
+              styles.saveBtn,
+              {
+                backgroundColor: isValid
+                  ? colors.primary
+                  : `${colors.primary}40`,
+              },
+            ]}
             onPress={handleSave}
             activeOpacity={0.85}
             disabled={!isValid || saving}
           >
-            <Feather name="check" size={18} color={colors.primaryForeground} />
-            <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>
-              Save Changes
+            {saving ? (
+              <ActivityIndicator
+                size="small"
+                color={colors.primaryForeground}
+              />
+            ) : (
+              <Feather
+                name="check"
+                size={18}
+                color={colors.primaryForeground}
+              />
+            )}
+            <Text
+              style={[styles.saveBtnText, { color: colors.primaryForeground }]}
+            >
+              {saving ? "Saving..." : "Save Changes"}
             </Text>
           </TouchableOpacity>
         </View>
@@ -231,6 +419,14 @@ export default function EditExerciseScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  headerDeleteBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 2,
+  },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   notFound: { fontSize: 15, fontFamily: "Inter_400Regular" },
   readOnlyBanner: {
@@ -273,6 +469,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
     borderTopWidth: 1,
+    gap: 10,
   },
   saveBtn: {
     flexDirection: "row",

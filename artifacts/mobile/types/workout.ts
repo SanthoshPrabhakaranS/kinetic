@@ -16,7 +16,7 @@ export type Equipment =
   | "Kettlebell"
   | "Cable";
 
-export type MeasurementUnit = "Weight & Reps" | "Reps Only" | "Duration";
+export type MeasurementUnit = "Weight & Reps" | "Duration";
 
 export type RoutineType = "push-pull-legs" | "full-body" | "custom";
 
@@ -35,6 +35,7 @@ export interface SetEntry {
   weight?: number;
   reps?: number;
   duration?: number;
+  durationUnit?: "seconds" | "minutes";
 }
 
 export interface WorkoutEntry {

@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
   Modal,
   ScrollView,
@@ -69,15 +70,19 @@ export default function CreateRoutineScreen() {
   };
 
   const handleCreate = async () => {
-    if (!isValid) return;
+    if (!isValid || saving) return;
     setSaving(true);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await addRoutine({
-      name: routineName.trim(),
-      type: "custom",
-      exercises: selectedExercises,
-    });
-    router.replace("/(tabs)");
+    try {
+      await addRoutine({
+        name: routineName.trim(),
+        type: "custom",
+        exercises: selectedExercises,
+      });
+      router.replace("/(tabs)");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const filteredExercises = exercises.filter(
@@ -218,11 +223,15 @@ export default function CreateRoutineScreen() {
           activeOpacity={0.85}
           disabled={!isValid || saving}
         >
-          <Feather name="zap" size={18} color={colors.primaryForeground} />
+          {saving ? (
+            <ActivityIndicator size="small" color={colors.primaryForeground} />
+          ) : (
+            <Feather name="zap" size={18} color={colors.primaryForeground} />
+          )}
           <Text
             style={[styles.createBtnText, { color: colors.primaryForeground }]}
           >
-            CREATE ROUTINE
+            {saving ? "CREATING..." : "CREATE ROUTINE"}
           </Text>
         </TouchableOpacity>
       </View>

@@ -47,9 +47,35 @@ function calcVolume(log: WorkoutLog) {
   );
 }
 
+function formatDuration(seconds?: number | null) {
+  if (seconds == null || Number.isNaN(seconds)) return "0s";
+  if (seconds >= 60) {
+    const minutes = Math.floor(seconds / 60);
+    const remaining = seconds % 60;
+    return remaining > 0 ? `${minutes}m ${remaining}s` : `${minutes}m`;
+  }
+  return `${seconds}s`;
+}
+
+function calcDuration(log: WorkoutLog) {
+  return log.entries.reduce(
+    (total, entry) =>
+      total + entry.sets.reduce((sum, set) => sum + (set.duration ?? 0), 0),
+    0,
+  );
+}
+
+function hasDuration(log: WorkoutLog) {
+  return log.entries.some((entry) =>
+    entry.sets.some((set) => set.duration != null),
+  );
+}
+
 function WorkoutLogCard({ log }: { log: WorkoutLog }) {
   const colors = useColors();
   const volume = calcVolume(log);
+  const duration = calcDuration(log);
+  const durationMode = hasDuration(log);
 
   return (
     <TouchableOpacity
@@ -83,7 +109,9 @@ function WorkoutLogCard({ log }: { log: WorkoutLog }) {
             ]}
           >
             <Text style={[styles.volumeText, { color: colors.primary }]}>
-              {Math.round(volume).toLocaleString()} kg
+              {durationMode
+                ? formatDuration(duration)
+                : `${Math.round(volume).toLocaleString()} kg`}
             </Text>
           </View>
           <Feather

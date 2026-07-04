@@ -137,7 +137,8 @@ const mapExercise = (row: any): Exercise => ({
   name: row.name,
   muscleGroup: row.muscle_group,
   equipment: row.equipment,
-  measurementUnit: row.measurement_unit,
+  measurementUnit:
+    row.measurement_unit === "Duration" ? "Duration" : "Weight & Reps",
   instructions: row.instructions ?? undefined,
   isCustom: row.is_custom,
 });
@@ -147,6 +148,7 @@ const mapWorkoutSet = (row: any): SetEntry => ({
   weight: row.weight !== null ? Number(row.weight) : undefined,
   reps: row.reps !== null ? Number(row.reps) : undefined,
   duration: row.duration !== null ? Number(row.duration) : undefined,
+  durationUnit: row.duration_unit === "minutes" ? "minutes" : "seconds",
 });
 
 const mapWorkoutEntry = (row: any): WorkoutEntry => ({
@@ -201,6 +203,7 @@ interface WorkoutContextValue {
     exerciseId: string,
     updates: Partial<Omit<Exercise, "id">>,
   ) => Promise<void>;
+  deleteExercise: (exerciseId: string) => Promise<void>;
   addWorkoutEntry: (
     entry: Omit<WorkoutEntry, "id" | "timestamp">,
     selectedDate?: string,
@@ -265,19 +268,19 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      if (payload.exercises.length > 0) {
-        const exerciseRows = payload.exercises.map((exercise) => ({
-          id: exercise.id,
-          user_id: persistedUserId,
-          name: exercise.name,
-          muscle_group: exercise.muscleGroup,
-          equipment: exercise.equipment,
-          measurement_unit: exercise.measurementUnit,
-          instructions: exercise.instructions ?? null,
-          is_custom: exercise.isCustom ?? false,
-        }));
+      const exerciseRows = payload.exercises.map((exercise) => ({
+        id: exercise.id,
+        user_id: persistedUserId,
+        name: exercise.name,
+        muscle_group: exercise.muscleGroup,
+        equipment: exercise.equipment,
+        measurement_unit: exercise.measurementUnit,
+        instructions: exercise.instructions ?? null,
+        is_custom: exercise.isCustom ?? false,
+      }));
 
-        await safeSyncTable(EXERCISES_TABLE, async () => {
+      await safeSyncTable(EXERCISES_TABLE, async () => {
+        if (exerciseRows.length > 0) {
           const { data, error } = await supabase
             .from(EXERCISES_TABLE)
             .upsert(exerciseRows, { onConflict: "id" })
@@ -294,8 +297,14 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
           console.info(
             `[WorkoutContext] Synced ${data?.length ?? exerciseRows.length} exercise(s) to Supabase`,
           );
-        });
-      }
+        }
+
+        await deleteMissingRowsForUser(
+          EXERCISES_TABLE,
+          persistedUserId,
+          exerciseRows.map((row) => String(row.id)),
+        );
+      });
 
       const workoutLogRows = payload.workoutLogs.map((log) => ({
         id: log.id,
@@ -324,6 +333,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             weight: set.weight ?? null,
             reps: set.reps ?? null,
             duration: set.duration ?? null,
+            duration_unit: set.durationUnit ?? "seconds",
           })),
         ),
       );
@@ -681,6 +691,39 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     [exercises, profile, routines, sync, weightLogs, workoutLogs],
   );
 
+  const deleteExercise = useCallback(
+    async (exerciseId: string) => {
+      const targetExercise = exercises.find(
+        (exercise) => exercise.id === exerciseId,
+      );
+
+      if (!targetExercise || !targetExercise.isCustom) {
+        return;
+      }
+
+      const updatedExercises = exercises.filter(
+        (exercise) => exercise.id !== exerciseId,
+      );
+      const updatedRoutines = routines.map((routine) => ({
+        ...routine,
+        exercises: routine.exercises.filter(
+          (routineExercise) => routineExercise.exerciseId !== exerciseId,
+        ),
+      }));
+
+      setExercises(updatedExercises);
+      setRoutines(updatedRoutines);
+      await sync({
+        profile,
+        exercises: updatedExercises,
+        workoutLogs,
+        routines: updatedRoutines,
+        weightLogs,
+      });
+    },
+    [exercises, profile, routines, sync, weightLogs, workoutLogs],
+  );
+
   const addWorkoutEntry = useCallback(
     async (
       entry: Omit<WorkoutEntry, "id" | "timestamp">,
@@ -928,6 +971,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       updateProfile,
       addExercise,
       updateExercise,
+      deleteExercise,
       addWorkoutEntry,
       updateWorkoutEntry,
       deleteWorkoutEntry,
@@ -959,6 +1003,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       streak,
       todayLog,
       totalVolumeToday,
+      deleteExercise,
       updateExercise,
       updateProfile,
       updateWorkoutEntry,
