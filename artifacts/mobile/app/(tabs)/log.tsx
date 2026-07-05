@@ -36,10 +36,7 @@ function calcTotalVolume(
   entries: { sets: { weight?: number; reps?: number }[] }[],
 ) {
   return entries.reduce((total, entry) => {
-    return (
-      total +
-      entry.sets.reduce((s, set) => s + (set.weight ?? 0) * (set.reps ?? 1), 0)
-    );
+    return total + entry.sets.reduce((s, set) => s + (set.weight ?? 0), 0);
   }, 0);
 }
 

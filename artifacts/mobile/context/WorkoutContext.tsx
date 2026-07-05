@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 
@@ -54,6 +55,10 @@ interface WorkoutSyncPayload {
   workoutLogs: WorkoutLog[];
   routines: Routine[];
   weightLogs: WeightEntry[];
+}
+
+interface PersistOptions {
+  allowDeletions?: boolean;
 }
 
 const buildUserProfile = (user: {
@@ -230,13 +235,20 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [weightLogs, setWeightLogs] = useState<WeightEntry[]>([]);
+  const hasCompletedServerHydrationRef = useRef(false);
 
   const persistStateToSupabase = useCallback(
-    async (userId: string, payload: WorkoutSyncPayload) => {
+    async (
+      userId: string,
+      payload: WorkoutSyncPayload,
+      options?: PersistOptions,
+    ) => {
       const { data: sessionData } = await supabase.auth.getSession();
       const sessionUserId = sessionData?.session?.user?.id ?? null;
       const { data: userData } = await supabase.auth.getUser();
       const resolvedUserId = userData?.user?.id ?? sessionUserId ?? userId;
+      const allowDeletions =
+        options?.allowDeletions ?? hasCompletedServerHydrationRef.current;
 
       if (!resolvedUserId) {
         console.warn("[WorkoutContext] Sync skipped — no active session.");
@@ -299,11 +311,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
           );
         }
 
-        await deleteMissingRowsForUser(
-          EXERCISES_TABLE,
-          persistedUserId,
-          exerciseRows.map((row) => String(row.id)),
-        );
+        if (allowDeletions) {
+          await deleteMissingRowsForUser(
+            EXERCISES_TABLE,
+            persistedUserId,
+            exerciseRows.map((row) => String(row.id)),
+          );
+        }
       });
 
       const workoutLogRows = payload.workoutLogs.map((log) => ({
@@ -345,11 +359,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           throw error;
         }
-        await deleteMissingRowsForUser(
-          WORKOUT_LOGS_TABLE,
-          persistedUserId,
-          workoutLogRows.map((row) => String(row.id)),
-        );
+        if (allowDeletions) {
+          await deleteMissingRowsForUser(
+            WORKOUT_LOGS_TABLE,
+            persistedUserId,
+            workoutLogRows.map((row) => String(row.id)),
+          );
+        }
       });
       await safeSyncTable(WORKOUT_ENTRIES_TABLE, async () => {
         const { error } = await supabase
@@ -358,11 +374,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           throw error;
         }
-        await deleteMissingRowsForUser(
-          WORKOUT_ENTRIES_TABLE,
-          persistedUserId,
-          workoutEntryRows.map((row) => String(row.id)),
-        );
+        if (allowDeletions) {
+          await deleteMissingRowsForUser(
+            WORKOUT_ENTRIES_TABLE,
+            persistedUserId,
+            workoutEntryRows.map((row) => String(row.id)),
+          );
+        }
       });
       await safeSyncTable(WORKOUT_SETS_TABLE, async () => {
         const { error } = await supabase
@@ -371,11 +389,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           throw error;
         }
-        await deleteMissingRowsForUser(
-          WORKOUT_SETS_TABLE,
-          persistedUserId,
-          workoutSetRows.map((row) => String(row.id)),
-        );
+        if (allowDeletions) {
+          await deleteMissingRowsForUser(
+            WORKOUT_SETS_TABLE,
+            persistedUserId,
+            workoutSetRows.map((row) => String(row.id)),
+          );
+        }
       });
 
       const routineRows = payload.routines.map((routine) => ({
@@ -403,11 +423,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           throw error;
         }
-        await deleteMissingRowsForUser(
-          ROUTINES_TABLE,
-          persistedUserId,
-          routineRows.map((row) => String(row.id)),
-        );
+        if (allowDeletions) {
+          await deleteMissingRowsForUser(
+            ROUTINES_TABLE,
+            persistedUserId,
+            routineRows.map((row) => String(row.id)),
+          );
+        }
       });
       await safeSyncTable(ROUTINE_EXERCISES_TABLE, async () => {
         const { error } = await supabase
@@ -416,11 +438,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           throw error;
         }
-        await deleteMissingRowsForUser(
-          ROUTINE_EXERCISES_TABLE,
-          persistedUserId,
-          routineExerciseRows.map((row) => String(row.id)),
-        );
+        if (allowDeletions) {
+          await deleteMissingRowsForUser(
+            ROUTINE_EXERCISES_TABLE,
+            persistedUserId,
+            routineExerciseRows.map((row) => String(row.id)),
+          );
+        }
       });
 
       const weightRows = payload.weightLogs.map((entry) => ({
@@ -438,11 +462,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         if (error) {
           throw error;
         }
-        await deleteMissingRowsForUser(
-          WEIGHT_ENTRIES_TABLE,
-          persistedUserId,
-          weightRows.map((row) => String(row.id)),
-        );
+        if (allowDeletions) {
+          await deleteMissingRowsForUser(
+            WEIGHT_ENTRIES_TABLE,
+            persistedUserId,
+            weightRows.map((row) => String(row.id)),
+          );
+        }
       });
     },
     [],
@@ -463,6 +489,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
+      hasCompletedServerHydrationRef.current = false;
 
       if (!user?.id) {
         setProfile(DEFAULT_PROFILE);
@@ -489,11 +516,11 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const [
-          { data: profileData },
-          { data: exercisesData },
-          { data: workoutLogsData },
-          { data: routineRows },
-          { data: weightRows },
+          { data: profileData, error: profileError },
+          { data: exercisesData, error: exercisesError },
+          { data: workoutLogsData, error: workoutLogsError },
+          { data: routineRows, error: routinesError },
+          { data: weightRows, error: weightError },
         ] = await Promise.all([
           supabase
             .from(PROFILE_TABLE)
@@ -522,21 +549,47 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             .order("timestamp", { ascending: false }),
         ]);
 
-        const { data: workoutEntriesData } = await supabase
-          .from(WORKOUT_ENTRIES_TABLE)
-          .select(
-            "id, workout_log_id, exercise_id, exercise_name, muscle_group, equipment, timestamp, workout_sets(id, set_number, weight, reps, duration)",
-          )
-          .eq("user_id", sessionUserId)
-          .order("timestamp", { ascending: true });
+        if (
+          profileError ||
+          exercisesError ||
+          workoutLogsError ||
+          routinesError ||
+          weightError
+        ) {
+          throw (
+            profileError ||
+            exercisesError ||
+            workoutLogsError ||
+            routinesError ||
+            weightError
+          );
+        }
 
-        const { data: routineExercisesData } = await supabase
-          .from(ROUTINE_EXERCISES_TABLE)
-          .select(
-            "id, routine_id, exercise_id, exercise_name, muscle_group, target_sets",
-          )
-          .eq("user_id", sessionUserId)
-          .order("inserted_at", { ascending: true });
+        const { data: workoutEntriesData, error: workoutEntriesError } =
+          await supabase
+            .from(WORKOUT_ENTRIES_TABLE)
+            .select(
+              "id, workout_log_id, exercise_id, exercise_name, muscle_group, equipment, timestamp, workout_sets(id, set_number, weight, reps, duration)",
+            )
+            .eq("user_id", sessionUserId)
+            .order("timestamp", { ascending: true });
+
+        if (workoutEntriesError) {
+          throw workoutEntriesError;
+        }
+
+        const { data: routineExercisesData, error: routineExercisesError } =
+          await supabase
+            .from(ROUTINE_EXERCISES_TABLE)
+            .select(
+              "id, routine_id, exercise_id, exercise_name, muscle_group, target_sets",
+            )
+            .eq("user_id", sessionUserId)
+            .order("inserted_at", { ascending: true });
+
+        if (routineExercisesError) {
+          throw routineExercisesError;
+        }
 
         const resolvedProfile: UserProfile = profileData
           ? {
@@ -608,24 +661,38 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         setWeightLogs(normalizedWeightLogs);
 
         if (!profileData) {
-          await persistStateToSupabase(sessionUserId, {
-            profile: resolvedProfile,
-            exercises: normalizedExercises,
-            workoutLogs: normalizedLogs,
-            routines: normalizedRoutines,
-            weightLogs: normalizedWeightLogs,
-          });
+          await persistStateToSupabase(
+            sessionUserId,
+            {
+              profile: resolvedProfile,
+              exercises: normalizedExercises,
+              workoutLogs: normalizedLogs,
+              routines: normalizedRoutines,
+              weightLogs: normalizedWeightLogs,
+            },
+            {
+              allowDeletions: false,
+            },
+          );
         }
 
         if (!exercisesData?.length) {
-          await persistStateToSupabase(sessionUserId, {
-            profile: resolvedProfile,
-            exercises: normalizedExercises,
-            workoutLogs: normalizedLogs,
-            routines: normalizedRoutines,
-            weightLogs: normalizedWeightLogs,
-          });
+          await persistStateToSupabase(
+            sessionUserId,
+            {
+              profile: resolvedProfile,
+              exercises: normalizedExercises,
+              workoutLogs: normalizedLogs,
+              routines: normalizedRoutines,
+              weightLogs: normalizedWeightLogs,
+            },
+            {
+              allowDeletions: false,
+            },
+          );
         }
+
+        hasCompletedServerHydrationRef.current = true;
       } catch (error) {
         console.error("[WorkoutContext] Unexpected error during load:", error);
       } finally {
@@ -928,11 +995,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     if (!todayLog) return 0;
     return todayLog.entries.reduce(
       (total, entry) =>
-        total +
-        entry.sets.reduce(
-          (s, set) => s + (set.weight ?? 0) * (set.reps ?? 1),
-          0,
-        ),
+        total + entry.sets.reduce((s, set) => s + (set.weight ?? 0), 0),
       0,
     );
   }, [todayLog]);

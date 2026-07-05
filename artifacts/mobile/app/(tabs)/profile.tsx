@@ -160,7 +160,7 @@ export default function ProfileScreen() {
             {profile.name || "Athlete"}
           </Text>
           <Text style={[styles.userSub, { color: colors.mutedForeground }]}>
-            KINETIC Member
+            LiftLog Member
           </Text>
         </View>
       </View>
@@ -395,7 +395,7 @@ export default function ProfileScreen() {
       >
         <SettingsRow
           icon="zap"
-          label="KINETIC"
+          label="LiftLog"
           sublabel="Gym Progress Tracker"
         />
         <SettingsRow icon="code" label="Version" sublabel={appVersion} />

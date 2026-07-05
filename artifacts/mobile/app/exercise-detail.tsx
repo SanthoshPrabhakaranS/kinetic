@@ -349,10 +349,7 @@ export default function ExerciseDetailScreen() {
   const activeSet = editableSets.find((s) => s._id === activeSetId);
   const activeSetIndex = editableSets.findIndex((s) => s._id === activeSetId);
 
-  const totalVolume = editableSets.reduce(
-    (t, s) => t + (s.weight ?? 0) * (s.reps ?? 1),
-    0,
-  );
+  const totalVolume = editableSets.reduce((t, s) => t + (s.weight ?? 0), 0);
   const totalDuration = editableSets.reduce((t, s) => t + (s.duration ?? 0), 0);
 
   return (

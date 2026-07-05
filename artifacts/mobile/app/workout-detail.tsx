@@ -56,10 +56,7 @@ function EntryCard({ entry }: { entry: WorkoutEntry }) {
   const hasDuration = entry.sets.some((set) => set.duration != null);
   const maxWeight = Math.max(...entry.sets.map((s) => s.weight ?? 0));
   const totalReps = entry.sets.reduce((t, s) => t + (s.reps ?? 0), 0);
-  const volume = entry.sets.reduce(
-    (t, s) => t + (s.weight ?? 0) * (s.reps ?? 1),
-    0,
-  );
+  const volume = entry.sets.reduce((t, s) => t + (s.weight ?? 0), 0);
   const totalDuration = entry.sets.reduce((t, s) => t + (s.duration ?? 0), 0);
   const longestDuration = Math.max(
     ...entry.sets.map((s) => s.duration ?? 0),
@@ -267,8 +264,7 @@ export default function WorkoutDetailScreen() {
   }
 
   const totalVolume = log.entries.reduce(
-    (t, e) =>
-      t + e.sets.reduce((s, set) => s + (set.weight ?? 0) * (set.reps ?? 1), 0),
+    (t, e) => t + e.sets.reduce((s, set) => s + (set.weight ?? 0), 0),
     0,
   );
 

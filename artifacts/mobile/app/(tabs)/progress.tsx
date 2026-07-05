@@ -39,11 +39,7 @@ function getWeekVolumes(logs: WorkoutLog[]) {
     const volume = log
       ? log.entries.reduce(
           (t, e) =>
-            t +
-            e.sets.reduce(
-              (s, set) => s + (set.weight ?? 0) * (set.reps ?? 1),
-              0,
-            ),
+            t + e.sets.reduce((s, set) => s + (set.weight ?? 0), 0),
           0,
         )
       : 0;
@@ -378,12 +374,7 @@ export default function ProgressScreen() {
         (t, log) =>
           t +
           log.entries.reduce(
-            (et, e) =>
-              et +
-              e.sets.reduce(
-                (s, set) => s + (set.weight ?? 0) * (set.reps ?? 1),
-                0,
-              ),
+            (et, e) => et + e.sets.reduce((s, set) => s + (set.weight ?? 0), 0),
             0,
           ),
         0,
