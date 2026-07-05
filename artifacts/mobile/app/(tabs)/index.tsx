@@ -264,10 +264,7 @@ export default function HomeScreen() {
     return selectedLog.entries.reduce(
       (total: any, entry: any) =>
         total +
-        entry.sets.reduce(
-          (sum: any, set: any) => sum + (set.weight ?? 0) * (set.reps ?? 1),
-          0,
-        ),
+        entry.sets.reduce((sum: any, set: any) => sum + (set.weight ?? 0), 0),
       0,
     );
   }, [selectedLog]);

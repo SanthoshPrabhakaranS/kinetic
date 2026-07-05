@@ -61,7 +61,7 @@ export default function OnboardingScreen() {
         <View style={styles.logoRow}>
           <Feather name="zap" size={20} color={colors.primary} />
           <Text style={[styles.logoText, { color: colors.primary }]}>
-            KINETIC
+            LiftLog
           </Text>
         </View>
 

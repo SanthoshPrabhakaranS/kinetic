@@ -3,7 +3,6 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -41,8 +40,7 @@ function formatDate(dateStr: string) {
 
 function calcVolume(log: WorkoutLog) {
   return log.entries.reduce(
-    (t, e) =>
-      t + e.sets.reduce((s, set) => s + (set.weight ?? 0) * (set.reps ?? 1), 0),
+    (t, e) => t + e.sets.reduce((s, set) => s + (set.weight ?? 0), 0),
     0,
   );
 }
@@ -290,51 +288,20 @@ export default function HistoryScreen() {
         )}
       </ScrollView>
 
-      <Modal
-        visible={showDatePicker}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDatePicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              Choose Date
-            </Text>
-            <View style={styles.pickerWrap}>
-              <DateTimePicker
-                value={selectedDate}
-                mode="date"
-                display="default"
-                onChange={(_, nextDate) => {
-                  if (nextDate) {
-                    setSelectedDate(nextDate);
-                    setActiveDateFilter(toDateInputValue(nextDate));
-                  }
-                  setShowDatePicker(false);
-                }}
-              />
-            </View>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, { borderColor: colors.border }]}
-                onPress={() => setShowDatePicker(false)}
-              >
-                <Text
-                  style={[styles.modalBtnText, { color: colors.foreground }]}
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={(_, nextDate) => {
+            if (nextDate) {
+              setSelectedDate(nextDate);
+              setActiveDateFilter(toDateInputValue(nextDate));
+            }
+            setShowDatePicker(false);
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -430,46 +397,6 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   loadMoreText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-    gap: 14,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-  },
-  pickerWrap: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-  },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 4,
-  },
-  modalBtn: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  modalBtnText: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
   },
