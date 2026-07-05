@@ -3,16 +3,17 @@
     "version": ">= 18.7.0",
     "appVersionSource": "remote"
   },
-  "build": {
+   "build": {
     "development": {
-      "developmentClient": true,
-      "distribution": "internal"
+      "node": "22.0.0",
+      "developmentClient": true
     },
     "preview": {
+      "node": "22.0.0",
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "node": "22.0.0"
     }
   },
   "submit": {
