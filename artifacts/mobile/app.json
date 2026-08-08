@@ -18,7 +18,11 @@
     },
     "android": {
       "backgroundColor": "#0A0A0A",
-      "package": "com.santhosh.p02.mobile"
+      "package": "com.santhosh.liftlog",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#0A0A0A"
+      }
     },
     "web": {
       "favicon": "./assets/images/icon.png"
