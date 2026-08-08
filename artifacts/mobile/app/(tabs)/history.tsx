@@ -170,6 +170,7 @@ export default function HistoryScreen() {
   const colors = useColors();
   const { workoutLogs } = useWorkout();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [draftDate, setDraftDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [visibleDays, setVisibleDays] = useState(10);
   const [activeDateFilter, setActiveDateFilter] = useState<string | null>(null);
@@ -227,6 +228,7 @@ export default function HistoryScreen() {
                 { backgroundColor: colors.card, borderColor: colors.border },
               ]}
               onPress={() => {
+                setDraftDate(selectedDate);
                 setShowDatePicker(true);
               }}
               activeOpacity={0.8}
@@ -289,18 +291,50 @@ export default function HistoryScreen() {
       </ScrollView>
 
       {showDatePicker && (
-        <DateTimePicker
-          value={selectedDate}
-          mode="date"
-          display={Platform.OS === "ios" ? "spinner" : "default"}
-          onChange={(_, nextDate) => {
-            if (nextDate) {
-              setSelectedDate(nextDate);
-              setActiveDateFilter(toDateInputValue(nextDate));
-            }
-            setShowDatePicker(false);
-          }}
-        />
+        <View style={[styles.pickerWrap, { backgroundColor: colors.card }]}>
+          <DateTimePicker
+            value={draftDate}
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            onChange={(_, nextDate) => {
+              if (Platform.OS === "ios") {
+                if (nextDate) {
+                  setDraftDate(nextDate);
+                }
+                return;
+              }
+              setShowDatePicker(false);
+              if (nextDate) {
+                setSelectedDate(nextDate);
+                setActiveDateFilter(toDateInputValue(nextDate));
+              }
+            }}
+          />
+          {Platform.OS === "ios" && (
+            <View style={styles.pickerActions}>
+              <TouchableOpacity
+                onPress={() => setShowDatePicker(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.pickerCancel, { color: colors.mutedForeground }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedDate(draftDate);
+                  setActiveDateFilter(toDateInputValue(draftDate));
+                  setShowDatePicker(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.pickerDone, { color: colors.primary }]}>
+                  Done
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       )}
     </View>
   );
@@ -399,5 +433,28 @@ const styles = StyleSheet.create({
   loadMoreText: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
+  },
+  pickerWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingTop: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+  },
+  pickerActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingTop: 12,
+    paddingHorizontal: 4,
+  },
+  pickerCancel: {
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+  },
+  pickerDone: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
   },
 });

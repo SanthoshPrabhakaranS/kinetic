@@ -5,28 +5,21 @@ import { Redirect, router } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Modal,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
   TouchableOpacity,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LogEntryCard } from "@/components/LogEntryCard";
+import { LogWeightModal } from "@/components/LogWeightModal";
 import { StatCard } from "@/components/StatCard";
 import { useAuth } from "@/context/AuthContext";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
-import {
-  convertWeight,
-  formatWeight,
-  lbsToKg,
-  type WeightUnit,
-} from "@/lib/weightUnits";
 
 function getDayName(date: Date) {
   return date.toLocaleDateString("en-US", { weekday: "long" });
@@ -183,76 +176,10 @@ const styles = StyleSheet.create({
   summaryList: {
     borderTopWidth: 1,
   },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  modalCard: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-    gap: 14,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontFamily: "Inter_700Bold",
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    fontFamily: "Inter_500Medium",
-  },
-  modalInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  unitSegmented: {
-    flexDirection: "row",
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 3,
-    gap: 2,
-  },
-  unitSegment: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  unitSegmentText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   pickerWrap: {
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 8,
-  },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    gap: 10,
-    marginTop: 4,
-  },
-  modalBtn: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  modalBtnPrimary: {
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  modalBtnText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
   },
 });
 
@@ -267,14 +194,11 @@ export default function HomeScreen() {
     totalVolumeToday,
     workoutLogs,
     addWeightEntry,
-    updateProfile,
   } = useWorkout();
   const { loading: authLoading, session } = useAuth();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showWeightModal, setShowWeightModal] = useState(false);
-  const [weightDraft, setWeightDraft] = useState("70");
-  const [weightUnit, setWeightUnit] = useState<WeightUnit>(profile.weightUnit);
   const weekWorkouts = getWeekWorkouts(workoutLogs);
 
   const selectedDateKey = useMemo(
@@ -443,7 +367,6 @@ export default function HomeScreen() {
               { backgroundColor: colors.card, borderColor: colors.border },
             ]}
             onPress={() => {
-              setWeightDraft("");
               setShowWeightModal(true);
             }}
             activeOpacity={0.85}
@@ -526,151 +449,11 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <Modal
+      <LogWeightModal
         visible={showWeightModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowWeightModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View
-            style={[
-              styles.modalCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              Log Weight
-            </Text>
-            <View style={styles.modalInputRow}>
-              <TextInput
-                style={[
-                  styles.modalInput,
-                  { color: colors.foreground, borderColor: colors.border },
-                ]}
-                value={weightDraft}
-                onChangeText={setWeightDraft}
-                placeholder="Enter weight"
-                placeholderTextColor={colors.mutedForeground}
-                keyboardType="decimal-pad"
-              />
-              <View
-                style={[
-                  styles.unitSegmented,
-                  { backgroundColor: colors.muted, borderColor: colors.border },
-                ]}
-              >
-                <TouchableOpacity
-                  style={[
-                    styles.unitSegment,
-                    weightUnit === "kg" && { backgroundColor: colors.primary },
-                  ]}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    const current = Number.parseFloat(weightDraft);
-                    if (!Number.isNaN(current)) {
-                      setWeightDraft(
-                        formatWeight(
-                          convertWeight(current, weightUnit, "kg"),
-                          "kg",
-                        ),
-                      );
-                    }
-                    setWeightUnit("kg");
-                    void updateProfile({ weightUnit: "kg" });
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.unitSegmentText,
-                      {
-                        color:
-                          weightUnit === "kg"
-                            ? colors.primaryForeground
-                            : colors.mutedForeground,
-                      },
-                    ]}
-                  >
-                    kg
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.unitSegment,
-                    weightUnit === "lbs" && { backgroundColor: colors.primary },
-                  ]}
-                  onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    const current = Number.parseFloat(weightDraft);
-                    if (!Number.isNaN(current)) {
-                      setWeightDraft(
-                        formatWeight(
-                          convertWeight(current, weightUnit, "lbs"),
-                          "lbs",
-                        ),
-                      );
-                    }
-                    setWeightUnit("lbs");
-                    void updateProfile({ weightUnit: "lbs" });
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.unitSegmentText,
-                      {
-                        color:
-                          weightUnit === "lbs"
-                            ? colors.primaryForeground
-                            : colors.mutedForeground,
-                      },
-                    ]}
-                  >
-                    lbs
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, { borderColor: colors.border }]}
-                onPress={() => setShowWeightModal(false)}
-              >
-                <Text
-                  style={[styles.modalBtnText, { color: colors.foreground }]}
-                >
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalBtnPrimary,
-                  { backgroundColor: colors.primary },
-                ]}
-                onPress={async () => {
-                  const nextWeight = Number.parseFloat(weightDraft);
-                  if (!Number.isNaN(nextWeight)) {
-                    const kgValue =
-                      weightUnit === "lbs" ? lbsToKg(nextWeight) : nextWeight;
-                    await addWeightEntry(kgValue, selectedDateKey);
-                  }
-                  setShowWeightModal(false);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.modalBtnText,
-                    { color: colors.primaryForeground },
-                  ]}
-                >
-                  Save
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowWeightModal(false)}
+        onSave={(w, selectedDate) => void addWeightEntry(w, selectedDate)}
+      />
     </View>
   );
 }
