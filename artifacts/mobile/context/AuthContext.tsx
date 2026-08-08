@@ -120,6 +120,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     setLoading(true);
+    try {
+      await GoogleSignin.signOut();
+    } catch (error) {
+      console.warn("Google native sign-out failed:", error);
+    }
     await supabase.auth.signOut();
     setSession(null);
     setUser(null);

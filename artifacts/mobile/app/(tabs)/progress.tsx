@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Modal,
@@ -17,6 +17,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { NumberPad } from "@/components/NumberPad";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  convertWeight,
+  formatWeight,
+  formatWeightDelta,
+  kgToLbs,
+  lbsToKg,
+  type WeightUnit,
+} from "@/lib/weightUnits";
 import type { WeightEntry, WorkoutLog } from "@/types/workout";
 
 function applyKey(current: string, key: string): string {
@@ -38,8 +46,7 @@ function getWeekVolumes(logs: WorkoutLog[]) {
     const log = logs.find((l) => l.date === dateStr);
     const volume = log
       ? log.entries.reduce(
-          (t, e) =>
-            t + e.sets.reduce((s, set) => s + (set.weight ?? 0), 0),
+          (t, e) => t + e.sets.reduce((s, set) => s + (set.weight ?? 0), 0),
           0,
         )
       : 0;
@@ -94,10 +101,12 @@ function WeightEntryRow({
   entry,
   prevWeight,
   onDelete,
+  unit,
 }: {
   entry: WeightEntry;
   prevWeight: number | null;
   onDelete: () => void;
+  unit: WeightUnit;
 }) {
   const colors = useColors();
   const dt = new Date(`${entry.date}T12:00:00`);
@@ -111,10 +120,11 @@ function WeightEntryRow({
     year: "numeric",
   });
 
+  const displayWeight =
+    unit === "kg" ? entry.weight : kgToLbs(entry.weight);
+  const rawDelta = prevWeight != null ? entry.weight - prevWeight : null;
   const delta =
-    prevWeight != null
-      ? Math.round((entry.weight - prevWeight) * 10) / 10
-      : null;
+    rawDelta != null ? convertWeight(rawDelta, "kg", unit) : null;
   const isLoss = delta != null && delta < 0;
   const isGain = delta != null && delta > 0;
   const deltaColor = isLoss
@@ -145,7 +155,7 @@ function WeightEntryRow({
       </View>
       <View style={styles.weightRight}>
         <Text style={[styles.weightValue, { color: colors.foreground }]}>
-          {entry.weight}
+          {formatWeight(displayWeight, unit)}
         </Text>
         {delta != null && (
           <View
@@ -157,8 +167,7 @@ function WeightEntryRow({
               color={deltaColor}
             />
             <Text style={[styles.deltaText, { color: deltaColor }]}>
-              {isLoss ? "" : "+"}
-              {delta} kg
+              {formatWeightDelta(delta, unit)} {unit}
             </Text>
           </View>
         )}
@@ -177,9 +186,17 @@ function AddWeightModal({
   onSave: (weight: number, selectedDate?: string) => void;
 }) {
   const colors = useColors();
+  const { profile, updateProfile } = useWorkout();
   const [value, setValue] = useState("0");
+  const [unit, setUnit] = useState<WeightUnit>(profile.weightUnit);
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setUnit(profile.weightUnit);
+    }
+  }, [visible, profile.weightUnit]);
 
   const dateStr = selectedDate.toLocaleDateString("en-US", {
     weekday: "long",
@@ -201,12 +218,23 @@ function AddWeightModal({
     setValue((v) => applyKey(v, key));
   };
 
+  const handleToggleUnit = (next: WeightUnit) => {
+    if (next === unit) return;
+    const current = parseFloat(value);
+    if (!Number.isNaN(current)) {
+      setValue(formatWeight(convertWeight(current, unit, next), next));
+    }
+    setUnit(next);
+    void updateProfile({ weightUnit: next });
+  };
+
   const handleSave = () => {
     const parsed = parseFloat(value);
-    if (!isNaN(parsed) && parsed > 0) {
+    if (!Number.isNaN(parsed) && parsed > 0) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      onSave(parsed, selectedDateKey);
-      setValue("70");
+      const kgValue = unit === "lbs" ? lbsToKg(parsed) : parsed;
+      onSave(kgValue, selectedDateKey);
+      setValue("0");
       onClose();
     }
   };
@@ -285,18 +313,73 @@ function AddWeightModal({
             )}
           </View>
 
-          <View style={styles.weightDisplay}>
-            <Text style={[styles.weightBig, { color: colors.primary }]}>
-              {value}
-            </Text>
-            <Text
-              style={[styles.weightUnitBig, { color: colors.mutedForeground }]}
+          <View style={styles.weightArea}>
+            <View style={styles.weightDisplay}>
+              <Text style={[styles.weightBig, { color: colors.primary }]}>
+                {value}
+              </Text>
+              <Text
+                style={[styles.weightUnitBig, { color: colors.mutedForeground }]}
+              >
+                {unit === "kg" ? "kg" : "lbs"}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.unitSegmented,
+                { backgroundColor: colors.muted, borderColor: colors.border },
+              ]}
             >
-              kg
-            </Text>
+              <TouchableOpacity
+                style={[
+                  styles.unitSegment,
+                  unit === "kg" && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => handleToggleUnit("kg")}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.unitSegmentText,
+                    {
+                      color:
+                        unit === "kg"
+                          ? colors.primaryForeground
+                          : colors.mutedForeground,
+                    },
+                  ]}
+                >
+                  kg
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.unitSegment,
+                  unit === "lbs" && { backgroundColor: colors.primary },
+                ]}
+                onPress={() => handleToggleUnit("lbs")}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.unitSegmentText,
+                    {
+                      color:
+                        unit === "lbs"
+                          ? colors.primaryForeground
+                          : colors.mutedForeground,
+                    },
+                  ]}
+                >
+                  lbs
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <NumberPad onPress={handleKey} />
+          <View style={styles.numPadWrap}>
+            <NumberPad onPress={handleKey} />
+          </View>
 
           <TouchableOpacity
             style={[styles.saveBtn, { backgroundColor: colors.primary }]}
@@ -326,7 +409,10 @@ export default function ProgressScreen() {
     weeklyWeightChange,
     addWeightEntry,
     deleteWeightEntry,
+    profile,
   } = useWorkout();
+
+  const unit = profile.weightUnit;
 
   const [showAddWeight, setShowAddWeight] = useState(false);
   const [visibleWeightEntries, setVisibleWeightEntries] = useState(5);
@@ -488,12 +574,12 @@ export default function ProgressScreen() {
             <>
               <View style={styles.cwWeightRow}>
                 <Text style={[styles.cwWeight, { color: colors.foreground }]}>
-                  {lastWeight}
+                  {formatWeight(convertWeight(lastWeight, "kg", unit), unit)}
                 </Text>
                 <Text
                   style={[styles.cwUnit, { color: colors.mutedForeground }]}
                 >
-                  KG
+                  {unit === "kg" ? "KG" : "LBS"}
                 </Text>
               </View>
               {weeklyWeightChange != null && (
@@ -515,8 +601,11 @@ export default function ProgressScreen() {
                     color={changeColor}
                   />
                   <Text style={[styles.cwChangeText, { color: changeColor }]}>
-                    {weeklyWeightChange > 0 ? "+" : ""}
-                    {weeklyWeightChange} kg this week
+                    {formatWeightDelta(
+                      convertWeight(weeklyWeightChange, "kg", unit),
+                      unit,
+                    )}{" "}
+                    {unit} this week
                   </Text>
                 </View>
               )}
@@ -582,10 +671,11 @@ export default function ProgressScreen() {
                       key={entry.id}
                       entry={entry}
                       prevWeight={prevEntry?.weight ?? null}
+                      unit={unit}
                       onDelete={() => {
                         Alert.alert(
                           "Delete Entry",
-                          `Remove ${entry.weight} kg entry?`,
+                          `Remove ${formatWeight(convertWeight(entry.weight, "kg", unit), unit)} ${unit} entry?`,
                           [
                             { text: "Cancel", style: "cancel" },
                             {
@@ -988,7 +1078,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
-    paddingTop: 40,
+    paddingTop: 60,
     paddingBottom: 10,
     borderBottomWidth: 1,
   },
@@ -1012,14 +1102,34 @@ const styles = StyleSheet.create({
   dateText: { fontSize: 13, fontFamily: "Inter_500Medium", flex: 1 },
   timeDot: { width: 4, height: 4, borderRadius: 2 },
   timeText2: { fontSize: 13, fontFamily: "Inter_500Medium" },
+  numPadWrap: { marginTop: "auto" },
+  weightArea: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 20,
+  },
   weightDisplay: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "center",
     gap: 8,
   },
-  weightBig: { fontSize: 72, fontFamily: "Inter_700Bold", lineHeight: 80 },
+  weightBig: { fontSize: 100, fontFamily: "Inter_700Bold", lineHeight: 80 },
   weightUnitBig: { fontSize: 24, fontFamily: "Inter_400Regular" },
+  unitSegmented: {
+    flexDirection: "row",
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 3,
+    gap: 2,
+  },
+  unitSegment: {
+    paddingHorizontal: 20,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  unitSegmentText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   saveBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1027,6 +1137,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     gap: 8,
+    marginBottom: 10,
   },
   saveBtnText: { fontSize: 15, fontFamily: "Inter_700Bold" },
 });

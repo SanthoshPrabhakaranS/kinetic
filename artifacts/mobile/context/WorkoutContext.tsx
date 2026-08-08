@@ -64,14 +64,20 @@ interface PersistOptions {
 const buildUserProfile = (user: {
   user_metadata?: any;
   email?: string;
-}): UserProfile => ({
-  ...DEFAULT_PROFILE,
-  name:
-    user.user_metadata?.full_name ??
-    user.user_metadata?.name ??
-    user.email ??
-    "",
-});
+}): UserProfile => {
+  const givenName = user.user_metadata?.given_name ?? "";
+  const familyName = user.user_metadata?.family_name ?? "";
+  return {
+    ...DEFAULT_PROFILE,
+    name:
+      user.user_metadata?.full_name ??
+      user.user_metadata?.name ??
+      user.user_metadata?.email ??
+      (givenName || familyName ? `${givenName} ${familyName}`.trim() : "") ??
+      user.email ??
+      "",
+  };
+};
 
 const describeSupabaseError = (error: unknown) => {
   if (typeof error === "object" && error && "message" in error) {
@@ -137,16 +143,38 @@ const seedDefaultExercisesForUser = (userId: string): Exercise[] =>
     isCustom: false,
   }));
 
-const mapExercise = (row: any): Exercise => ({
-  id: row.id,
-  name: row.name,
-  muscleGroup: row.muscle_group,
-  equipment: row.equipment,
-  measurementUnit:
-    row.measurement_unit === "Duration" ? "Duration" : "Weight & Reps",
-  instructions: row.instructions ?? undefined,
-  isCustom: row.is_custom,
-});
+const DEFAULT_EXERCISES_BY_NAME = new Map<string, Exercise>(
+  DEFAULT_EXERCISES.map((exercise) => [
+    exercise.name.toLowerCase(),
+    exercise,
+  ]),
+);
+
+const mapExercise = (row: any): Exercise => {
+  const canonical =
+    !row.is_custom
+      ? DEFAULT_EXERCISES_BY_NAME.get(
+          String(row.name ?? "").trim().toLowerCase(),
+        )
+      : undefined;
+  return {
+    id: row.id,
+    name: row.name || "Exercise",
+    muscleGroup:
+      canonical?.muscleGroup ??
+      row.muscle_group ??
+      row.muscleGroup ??
+      "CORE",
+    equipment: canonical?.equipment ?? row.equipment ?? "Bodyweight",
+    measurementUnit:
+      canonical?.measurementUnit ??
+      (row.measurement_unit === "Duration"
+        ? "Duration"
+        : row.measurement_unit ?? row.measurementUnit ?? "Weight & Reps"),
+    instructions: canonical?.instructions ?? row.instructions ?? undefined,
+    isCustom: row.is_custom ?? false,
+  };
+};
 
 const mapWorkoutSet = (row: any): SetEntry => ({
   setNumber: Number(row.set_number),
@@ -156,29 +184,43 @@ const mapWorkoutSet = (row: any): SetEntry => ({
   durationUnit: row.duration_unit === "minutes" ? "minutes" : "seconds",
 });
 
-const mapWorkoutEntry = (row: any): WorkoutEntry => ({
-  id: row.id,
-  exerciseId: row.exercise_id ?? "",
-  exerciseName: row.exercise_name,
-  muscleGroup: row.muscle_group,
-  equipment: row.equipment,
-  timestamp: row.timestamp,
-  sets: Array.isArray(row.workout_sets)
-    ? row.workout_sets.map(mapWorkoutSet)
-    : [],
-});
+const mapWorkoutEntry = (row: any): WorkoutEntry => {
+  const canonical = DEFAULT_EXERCISES_BY_NAME.get(
+    String(row.exercise_name ?? "").trim().toLowerCase(),
+  );
+  return {
+    id: row.id,
+    exerciseId: row.exercise_id ?? "",
+    exerciseName: row.exercise_name || "Exercise",
+    muscleGroup:
+      canonical?.muscleGroup ?? row.muscle_group ?? row.muscleGroup ?? "CORE",
+    equipment: canonical?.equipment ?? row.equipment ?? "Bodyweight",
+    timestamp: row.timestamp,
+    sets: Array.isArray(row.workout_sets)
+      ? row.workout_sets.map(mapWorkoutSet)
+      : [],
+  };
+};
 
 const mapRoutine = (row: any): Routine => ({
   id: row.id,
   name: row.name,
   type: row.type,
   exercises: Array.isArray(row.routine_exercises)
-    ? row.routine_exercises.map((exerciseRow: any) => ({
-        exerciseId: exerciseRow.exercise_id,
-        exerciseName: exerciseRow.exercise_name,
-        muscleGroup: exerciseRow.muscle_group,
-        targetSets: Number(exerciseRow.target_sets),
-      }))
+    ? row.routine_exercises.map((exerciseRow: any) => {
+        const canonical = DEFAULT_EXERCISES_BY_NAME.get(
+          String(exerciseRow.exercise_name ?? "").trim().toLowerCase(),
+        );
+        return {
+          exerciseId: exerciseRow.exercise_id,
+          exerciseName: exerciseRow.exercise_name || "Exercise",
+          muscleGroup:
+            canonical?.muscleGroup ??
+            exerciseRow.muscle_group ??
+            "CORE",
+          targetSets: Number(exerciseRow.target_sets) || 3,
+        };
+      })
     : [],
 });
 
@@ -218,6 +260,7 @@ interface WorkoutContextValue {
   getEntryById: (entryId: string) => WorkoutEntry | null;
   getLogById: (logId: string) => WorkoutLog | null;
   getLastEntryForExercise: (exerciseId: string) => WorkoutEntry | null;
+  getSessionsForExercise: (exerciseId: string) => WorkoutEntry[];
   getBestSetForExercise: (exerciseId: string) => SetEntry | null;
   addRoutine: (routine: Omit<Routine, "id">) => Promise<void>;
   addWeightEntry: (weight: number, selectedDate?: string) => Promise<void>;
@@ -280,16 +323,18 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
-      const exerciseRows = payload.exercises.map((exercise) => ({
-        id: exercise.id,
-        user_id: persistedUserId,
-        name: exercise.name,
-        muscle_group: exercise.muscleGroup,
-        equipment: exercise.equipment,
-        measurement_unit: exercise.measurementUnit,
-        instructions: exercise.instructions ?? null,
-        is_custom: exercise.isCustom ?? false,
-      }));
+      const exerciseRows = payload.exercises
+        .filter((exercise) => Boolean(exercise.id))
+        .map((exercise) => ({
+          id: exercise.id,
+          user_id: persistedUserId,
+          name: exercise.name?.trim() || "Exercise",
+          muscle_group: exercise.muscleGroup || "CORE",
+          equipment: exercise.equipment || "Bodyweight",
+          measurement_unit: exercise.measurementUnit || "Weight & Reps",
+          instructions: exercise.instructions ?? null,
+          is_custom: exercise.isCustom ?? false,
+        }));
 
       await safeSyncTable(EXERCISES_TABLE, async () => {
         if (exerciseRows.length > 0) {
@@ -326,16 +371,18 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         date: log.date,
       }));
       const workoutEntryRows = payload.workoutLogs.flatMap((log) =>
-        log.entries.map((entry) => ({
-          id: entry.id,
-          workout_log_id: log.id,
-          user_id: persistedUserId,
-          exercise_id: entry.exerciseId,
-          exercise_name: entry.exerciseName,
-          muscle_group: entry.muscleGroup,
-          equipment: entry.equipment,
-          timestamp: entry.timestamp,
-        })),
+        log.entries
+          .filter((entry) => Boolean(entry.id))
+          .map((entry) => ({
+            id: entry.id,
+            workout_log_id: log.id,
+            user_id: persistedUserId,
+            exercise_id: entry.exerciseId ?? null,
+            exercise_name: entry.exerciseName?.trim() || "Exercise",
+            muscle_group: entry.muscleGroup || "CORE",
+            equipment: entry.equipment || "Bodyweight",
+            timestamp: entry.timestamp,
+          })),
       );
       const workoutSetRows = payload.workoutLogs.flatMap((log) =>
         log.entries.flatMap((entry) =>
@@ -405,15 +452,20 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         type: routine.type,
       }));
       const routineExerciseRows = payload.routines.flatMap((routine) =>
-        routine.exercises.map((exercise) => ({
-          id: `${routine.id}-${exercise.exerciseId}`,
-          routine_id: routine.id,
-          user_id: persistedUserId,
-          exercise_id: exercise.exerciseId,
-          exercise_name: exercise.exerciseName,
-          muscle_group: exercise.muscleGroup,
-          target_sets: exercise.targetSets,
-        })),
+        routine.exercises
+          .filter((exercise) => Boolean(exercise.exerciseId))
+          .map((exercise) => ({
+            id: `${routine.id}-${exercise.exerciseId}`,
+            routine_id: routine.id,
+            user_id: persistedUserId,
+            exercise_id: exercise.exerciseId,
+            exercise_name: exercise.exerciseName?.trim() || "Exercise",
+            muscle_group: exercise.muscleGroup || "CORE",
+            target_sets:
+              Number.isFinite(Number(exercise.targetSets)) && Number(exercise.targetSets) > 0
+                ? exercise.targetSets
+                : 3,
+          })),
       );
 
       await safeSyncTable(ROUTINES_TABLE, async () => {
@@ -591,21 +643,21 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
           throw routineExercisesError;
         }
 
+        const googleProfile = buildUserProfile(user);
         const resolvedProfile: UserProfile = profileData
           ? {
-              name: profileData.name ?? "",
+              name: profileData.name?.trim() || googleProfile.name,
               onboardingComplete: Boolean(profileData.onboarding_complete),
               selectedRoutineType: profileData.selected_routine_type ?? null,
               weightUnit: profileData.weight_unit === "lbs" ? "lbs" : "kg",
             }
-          : buildUserProfile(user);
+          : googleProfile;
 
         const fallbackExercises = seedDefaultExercisesForUser(sessionUserId);
-        const normalizedExercises = (
+        const normalizedExercises =
           exercisesData && exercisesData.length > 0
-            ? exercisesData
-            : fallbackExercises
-        ).map(mapExercise);
+            ? exercisesData.map(mapExercise)
+            : fallbackExercises;
 
         const entriesByLogId = new Map<string, any[]>();
         for (const entryRow of workoutEntriesData ?? []) {
@@ -903,6 +955,21 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     [workoutLogs],
   );
 
+  const getSessionsForExercise = useCallback(
+    (exerciseId: string): WorkoutEntry[] => {
+      const today = getTodayDate();
+      return workoutLogs
+        .filter((log) => log.date !== today)
+        .flatMap((log) =>
+          log.entries.filter((entry) => entry.exerciseId === exerciseId),
+        )
+        .sort((a, b) =>
+          String(b.timestamp).localeCompare(String(a.timestamp)),
+        );
+    },
+    [workoutLogs],
+  );
+
   const getBestSetForExercise = useCallback(
     (exerciseId: string): SetEntry | null => {
       let bestSet: SetEntry | null = null;
@@ -1041,6 +1108,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       getEntryById,
       getLogById,
       getLastEntryForExercise,
+      getSessionsForExercise,
       getBestSetForExercise,
       addRoutine,
       addWeightEntry,
@@ -1058,6 +1126,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       getEntryById,
       getLastEntryForExercise,
       getLogById,
+      getSessionsForExercise,
       isReady,
       lastWeight,
       loading,

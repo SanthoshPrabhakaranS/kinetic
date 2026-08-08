@@ -119,6 +119,35 @@ function shiftDurationValue(
   );
 }
 
+function formatSessionSets(
+  entry: { sets: SetEntry[] },
+  measurementUnit?: string,
+) {
+  if (measurementUnit === "Duration") {
+    return entry.sets.map((s) => formatDuration(s.duration)).join(", ");
+  }
+  return entry.sets
+    .map((s) => `${s.weight ?? "—"}kg × ${s.reps ?? "—"}`)
+    .join(", ");
+}
+
+function formatSessionDate(timestamp: string) {
+  const date = new Date(timestamp);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const todayStr = today.toISOString().split("T")[0];
+  const yestStr = yesterday.toISOString().split("T")[0];
+  const dateStr = date.toISOString().split("T")[0];
+  if (dateStr === todayStr) return "Today";
+  if (dateStr === yestStr) return "Yesterday";
+  return date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export default function QuickLogScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
@@ -126,7 +155,8 @@ export default function QuickLogScreen() {
     exerciseId?: string;
     selectedDate?: string;
   }>();
-  const { exercises, addWorkoutEntry, getLastEntryForExercise } = useWorkout();
+  const { exercises, addWorkoutEntry, getLastEntryForExercise, getSessionsForExercise } =
+    useWorkout();
 
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
     null,
@@ -155,6 +185,16 @@ export default function QuickLogScreen() {
     [selectedExercise, getLastEntryForExercise],
   );
 
+  const pastSessions = useMemo(
+    () =>
+      selectedExercise ? getSessionsForExercise(selectedExercise.id) : [],
+    [selectedExercise, getSessionsForExercise],
+  );
+
+  const [sessionsExpanded, setSessionsExpanded] = useState(false);
+  const [visibleSessions, setVisibleSessions] = useState(3);
+  const SESSIONS_PER_PAGE = 3;
+
   useEffect(() => {
     if (exerciseId) {
       const ex = exercises.find((e) => e.id === exerciseId);
@@ -162,6 +202,8 @@ export default function QuickLogScreen() {
     } else {
       setShowPicker(true);
     }
+    setSessionsExpanded(false);
+    setVisibleSessions(3);
   }, [exerciseId, exercises]);
 
   useEffect(() => {
@@ -540,28 +582,106 @@ export default function QuickLogScreen() {
         </TouchableOpacity>
 
         {lastEntry && (
-          <View
-            style={[
-              styles.lastSession,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Feather name="clock" size={12} color={colors.mutedForeground} />
-            <Text
+          <View style={styles.sessionsSection}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setSessionsExpanded((prev) => !prev);
+              }}
               style={[
-                styles.lastSessionText,
-                { color: colors.mutedForeground },
+                styles.lastSession,
+                { backgroundColor: colors.card, borderColor: colors.border },
               ]}
             >
-              Last session:
-              {selectedExercise?.measurementUnit === "Duration"
-                ? lastEntry.sets
-                    .map((s) => formatDuration(s.duration))
-                    .join(", ")
-                : lastEntry.sets
-                    .map((s) => `${s.weight ?? "—"}kg × ${s.reps ?? "—"}`)
-                    .join(", ")}
-            </Text>
+              <Feather name="clock" size={12} color={colors.mutedForeground} />
+              <Text
+                style={[
+                  styles.lastSessionText,
+                  { color: colors.mutedForeground },
+                ]}
+                numberOfLines={1}
+              >
+                Last session:
+                {formatSessionSets(
+                  lastEntry,
+                  selectedExercise?.measurementUnit,
+                )}
+              </Text>
+              <Feather
+                name={sessionsExpanded ? "chevron-up" : "chevron-down"}
+                size={16}
+                color={colors.mutedForeground}
+              />
+            </TouchableOpacity>
+
+            {sessionsExpanded && pastSessions.length > 0 && (
+              <View
+                style={[
+                  styles.sessionsList,
+                  { borderColor: colors.border },
+                ]}
+              >
+                {pastSessions.slice(0, visibleSessions).map((session, index) => (
+                  <View
+                    key={session.id}
+                    style={[
+                      styles.sessionRow,
+                      index > 0 && {
+                        borderTopWidth: StyleSheet.hairlineWidth,
+                        borderTopColor: colors.border,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.sessionDate,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      {formatSessionDate(session.timestamp)}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.sessionSummary,
+                        { color: colors.mutedForeground },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {formatSessionSets(
+                        session,
+                        selectedExercise?.measurementUnit,
+                      )}
+                    </Text>
+                  </View>
+                ))}
+
+                {visibleSessions < pastSessions.length && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      void Haptics.impactAsync(
+                        Haptics.ImpactFeedbackStyle.Light,
+                      );
+                      setVisibleSessions(
+                        (prev) => prev + SESSIONS_PER_PAGE,
+                      );
+                    }}
+                    style={[
+                      styles.loadMore,
+                      { borderTopColor: colors.border },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.loadMoreText, { color: colors.primary }]}
+                    >
+                      Load more
+                    </Text>
+                    <Feather name="chevrons-down" size={14} color={colors.primary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
           </View>
         )}
 
@@ -1297,6 +1417,8 @@ export default function QuickLogScreen() {
                 onPress={() => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   setSelectedExercise(item);
+                  setSessionsExpanded(false);
+                  setVisibleSessions(3);
                   setShowPicker(false);
                   setPickerQuery("");
                 }}
@@ -1378,6 +1500,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   lastSessionText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+  sessionsSection: { gap: 6 },
+  sessionsList: {
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  sessionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  sessionDate: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    minWidth: 72,
+  },
+  sessionSummary: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+  loadMore: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  loadMoreText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   setsHeader: {
     flexDirection: "row",
     justifyContent: "space-between",

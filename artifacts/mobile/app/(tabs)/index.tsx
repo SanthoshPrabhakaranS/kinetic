@@ -21,6 +21,12 @@ import { StatCard } from "@/components/StatCard";
 import { useAuth } from "@/context/AuthContext";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  convertWeight,
+  formatWeight,
+  lbsToKg,
+  type WeightUnit,
+} from "@/lib/weightUnits";
 
 function getDayName(date: Date) {
   return date.toLocaleDateString("en-US", { weekday: "long" });
@@ -204,6 +210,24 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: "Inter_500Medium",
   },
+  modalInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  unitSegmented: {
+    flexDirection: "row",
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 3,
+    gap: 2,
+  },
+  unitSegment: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  unitSegmentText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   pickerWrap: {
     alignItems: "center",
     justifyContent: "center",
@@ -243,12 +267,14 @@ export default function HomeScreen() {
     totalVolumeToday,
     workoutLogs,
     addWeightEntry,
+    updateProfile,
   } = useWorkout();
   const { loading: authLoading, session } = useAuth();
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [weightDraft, setWeightDraft] = useState("70");
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>(profile.weightUnit);
   const weekWorkouts = getWeekWorkouts(workoutLogs);
 
   const selectedDateKey = useMemo(
@@ -516,17 +542,96 @@ export default function HomeScreen() {
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>
               Log Weight
             </Text>
-            <TextInput
-              style={[
-                styles.modalInput,
-                { color: colors.foreground, borderColor: colors.border },
-              ]}
-              value={weightDraft}
-              onChangeText={setWeightDraft}
-              placeholder="Enter weight"
-              placeholderTextColor={colors.mutedForeground}
-              keyboardType="decimal-pad"
-            />
+            <View style={styles.modalInputRow}>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  { color: colors.foreground, borderColor: colors.border },
+                ]}
+                value={weightDraft}
+                onChangeText={setWeightDraft}
+                placeholder="Enter weight"
+                placeholderTextColor={colors.mutedForeground}
+                keyboardType="decimal-pad"
+              />
+              <View
+                style={[
+                  styles.unitSegmented,
+                  { backgroundColor: colors.muted, borderColor: colors.border },
+                ]}
+              >
+                <TouchableOpacity
+                  style={[
+                    styles.unitSegment,
+                    weightUnit === "kg" && { backgroundColor: colors.primary },
+                  ]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const current = Number.parseFloat(weightDraft);
+                    if (!Number.isNaN(current)) {
+                      setWeightDraft(
+                        formatWeight(
+                          convertWeight(current, weightUnit, "kg"),
+                          "kg",
+                        ),
+                      );
+                    }
+                    setWeightUnit("kg");
+                    void updateProfile({ weightUnit: "kg" });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.unitSegmentText,
+                      {
+                        color:
+                          weightUnit === "kg"
+                            ? colors.primaryForeground
+                            : colors.mutedForeground,
+                      },
+                    ]}
+                  >
+                    kg
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.unitSegment,
+                    weightUnit === "lbs" && { backgroundColor: colors.primary },
+                  ]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const current = Number.parseFloat(weightDraft);
+                    if (!Number.isNaN(current)) {
+                      setWeightDraft(
+                        formatWeight(
+                          convertWeight(current, weightUnit, "lbs"),
+                          "lbs",
+                        ),
+                      );
+                    }
+                    setWeightUnit("lbs");
+                    void updateProfile({ weightUnit: "lbs" });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.unitSegmentText,
+                      {
+                        color:
+                          weightUnit === "lbs"
+                            ? colors.primaryForeground
+                            : colors.mutedForeground,
+                      },
+                    ]}
+                  >
+                    lbs
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, { borderColor: colors.border }]}
@@ -546,7 +651,9 @@ export default function HomeScreen() {
                 onPress={async () => {
                   const nextWeight = Number.parseFloat(weightDraft);
                   if (!Number.isNaN(nextWeight)) {
-                    await addWeightEntry(nextWeight, selectedDateKey);
+                    const kgValue =
+                      weightUnit === "lbs" ? lbsToKg(nextWeight) : nextWeight;
+                    await addWeightEntry(kgValue, selectedDateKey);
                   }
                   setShowWeightModal(false);
                 }}
