@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
   Platform,
@@ -23,6 +24,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NumberPad } from "@/components/NumberPad";
+import { useRestTimer } from "@/context/RestTimerContext";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
 import type { Exercise, SetEntry } from "@/types/workout";
@@ -131,6 +133,13 @@ function formatSessionSets(
     .join(", ");
 }
 
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function formatSessionDate(timestamp: string) {
   const date = new Date(timestamp);
   const today = new Date();
@@ -155,8 +164,9 @@ export default function QuickLogScreen() {
     exerciseId?: string;
     selectedDate?: string;
   }>();
-  const { exercises, addWorkoutEntry, getLastEntryForExercise, getSessionsForExercise } =
+  const { exercises, workoutLogs, addWorkoutEntry, deleteWorkoutEntry, getLastEntryForExercise, getSessionsForExercise } =
     useWorkout();
+  const { startRest, active: restActive } = useRestTimer();
 
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
     null,
@@ -190,6 +200,16 @@ export default function QuickLogScreen() {
       selectedExercise ? getSessionsForExercise(selectedExercise.id) : [],
     [selectedExercise, getSessionsForExercise],
   );
+
+  const editingEntry = useMemo(() => {
+    if (!exerciseId) return null;
+    const dateKey =
+      typeof selectedDate === "string" && selectedDate.trim()
+        ? selectedDate.trim()
+        : toDateInputValue(new Date());
+    const log = workoutLogs.find((l) => l.date === dateKey);
+    return log?.entries.find((e) => e.exerciseId === exerciseId) ?? null;
+  }, [exerciseId, selectedDate, workoutLogs]);
 
   const [sessionsExpanded, setSessionsExpanded] = useState(false);
   const [visibleSessions, setVisibleSessions] = useState(3);
@@ -460,11 +480,36 @@ export default function QuickLogScreen() {
           : undefined,
       );
 
+      startRest();
       setSaved(true);
       setTimeout(() => router.back(), 500);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleDeleteEntry = () => {
+    if (!editingEntry) return;
+    Alert.alert(
+      "Delete Entry",
+      `Remove ${
+        selectedExercise?.name ?? editingEntry.exerciseName
+      } from this day's log?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            void Haptics.notificationAsync(
+              Haptics.NotificationFeedbackType.Warning,
+            );
+            await deleteWorkoutEntry(editingEntry.id);
+            router.back();
+          },
+        },
+      ],
+    );
   };
 
   const filteredExercises = exercises.filter(
@@ -495,34 +540,43 @@ export default function QuickLogScreen() {
             Quick Log
           </Text>
         </View>
+        {selectedExercise && editingEntry && (
+          <TouchableOpacity
+            onPress={handleDeleteEntry}
+            hitSlop={10}
+            style={[
+              styles.deleteHeaderBtn,
+              { borderColor: colors.border },
+            ]}
+          >
+            <Feather name="trash-2" size={16} color={colors.destructive} />
+          </TouchableOpacity>
+        )}
         {selectedExercise && (
           <TouchableOpacity
             style={[
-              styles.saveHeaderBtn,
+              styles.restHeaderBtn,
               {
-                backgroundColor:
-                  saved || isSaving ? colors.muted : colors.primary,
+                backgroundColor: restActive ? colors.muted : colors.card,
+                borderColor: restActive ? colors.border : colors.primary,
               },
             ]}
-            onPress={handleSave}
-            disabled={saved || isSaving}
+            onPress={() => startRest()}
             activeOpacity={0.8}
           >
-            {isSaving ? (
-              <ActivityIndicator
-                size="small"
-                color={colors.primaryForeground}
-              />
-            ) : (
-              <Text
-                style={[
-                  styles.saveHeaderText,
-                  { color: colors.primaryForeground },
-                ]}
-              >
-                {saved ? "Saved!" : "Save"}
-              </Text>
-            )}
+            <Feather
+              name="clock"
+              size={16}
+              color={restActive ? colors.foreground : colors.primary}
+            />
+            <Text
+              style={[
+                styles.restHeaderText,
+                { color: restActive ? colors.foreground : colors.primary },
+              ]}
+            >
+              Rest
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1469,6 +1523,24 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   saveHeaderText: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  deleteHeaderBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  restHeaderBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  restHeaderText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   scroll: { flex: 1 },
   content: { paddingHorizontal: 20, paddingTop: 16, gap: 14 },
   exerciseRow: {

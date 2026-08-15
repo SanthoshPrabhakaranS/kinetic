@@ -423,8 +423,11 @@ export default function HomeScreen() {
                 entry={entry}
                 onPress={() =>
                   router.push({
-                    pathname: "/exercise-detail",
-                    params: { entryId: entry.id },
+                    pathname: "/quick-log",
+                    params: {
+                      exerciseId: entry.exerciseId,
+                      selectedDate: selectedDateKey,
+                    },
                   })
                 }
               />
