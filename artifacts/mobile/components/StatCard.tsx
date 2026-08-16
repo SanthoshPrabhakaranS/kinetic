@@ -8,6 +8,7 @@ interface StatCardProps {
   value: string | number;
   unit?: string;
   accent?: boolean;
+  children?: React.ReactNode;
 }
 
 export function StatCard({
@@ -15,6 +16,7 @@ export function StatCard({
   value,
   unit,
   accent = false,
+  children,
 }: StatCardProps) {
   const colors = useColors();
 
@@ -23,8 +25,8 @@ export function StatCard({
       style={[
         styles.container,
         {
-          backgroundColor: accent ? `${colors.primary}15` : colors.card,
-          borderColor: accent ? `${colors.primary}30` : colors.border,
+          backgroundColor: colors.card,
+          borderColor: accent ? `${colors.primary}20` : colors.border,
         },
       ]}
     >
@@ -46,6 +48,7 @@ export function StatCard({
           </Text>
         )}
       </View>
+      {children}
     </View>
   );
 }

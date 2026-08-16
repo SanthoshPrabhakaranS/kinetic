@@ -121,6 +121,27 @@ function shiftDurationValue(
   );
 }
 
+function buildSignature(
+  sets: SetRow[],
+  isDurationExercise: boolean,
+  defaultDurationUnit: DurationUnit,
+) {
+  return JSON.stringify(
+    sets.map((s) =>
+      isDurationExercise
+        ? {
+            t: "d",
+            v:
+              durationToSeconds(
+                s.duration,
+                s.durationUnit ?? defaultDurationUnit,
+              ) ?? 0,
+          }
+        : { t: "w", w: parseFloat(s.weight) || 0, r: parseInt(s.reps) || 0 },
+    ),
+  );
+}
+
 function formatSessionSets(
   entry: { sets: SetEntry[] },
   measurementUnit?: string,
@@ -160,13 +181,21 @@ function formatSessionDate(timestamp: string) {
 export default function QuickLogScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { exerciseId, selectedDate } = useLocalSearchParams<{
+  const { exerciseId, entryId, selectedDate } = useLocalSearchParams<{
     exerciseId?: string;
+    entryId?: string;
     selectedDate?: string;
   }>();
-  const { exercises, workoutLogs, addWorkoutEntry, deleteWorkoutEntry, getLastEntryForExercise, getSessionsForExercise } =
-    useWorkout();
-  const { startRest, active: restActive } = useRestTimer();
+  const {
+    exercises,
+    workoutLogs,
+    addWorkoutEntry,
+    updateWorkoutEntry,
+    deleteWorkoutEntry,
+    getLastEntryForExercise,
+    getSessionsForExercise,
+  } = useWorkout();
+  const { startRest, skip: skipRest, active: restActive } = useRestTimer();
 
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(
     null,
@@ -175,10 +204,17 @@ export default function QuickLogScreen() {
   const [pickerQuery, setPickerQuery] = useState("");
 
   const [sets, setSets] = useState<SetRow[]>([makeSet()]);
-  const [activeSetId, setActiveSetId] = useState<string>(sets[0]!.id);
+  const [activeSetId, setActiveSetId] = useState<string>(
+    () => sets[0]?.id ?? "",
+  );
   const [activeField, setActiveField] = useState<ActiveField>("weight");
-  const [saved, setSaved] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState<"save" | "complete" | null>(
+    null,
+  );
+  const isSaving = savingAction !== null;
+  const lastSavedRef = useRef<string | null>(null);
+  const seedRowIdRef = useRef<string | null>(null);
+  const skipPrefillRef = useRef(false);
   const [durationRunning, setDurationRunning] = useState(false);
   const [defaultDurationUnit, setDefaultDurationUnit] =
     useState<DurationUnit>("seconds");
@@ -189,6 +225,10 @@ export default function QuickLogScreen() {
 
   const isDurationExercise = selectedExercise?.measurementUnit === "Duration";
 
+  const dirty =
+    lastSavedRef.current !==
+    buildSignature(sets, isDurationExercise, defaultDurationUnit);
+
   const lastEntry = useMemo(
     () =>
       selectedExercise ? getLastEntryForExercise(selectedExercise.id) : null,
@@ -196,20 +236,19 @@ export default function QuickLogScreen() {
   );
 
   const pastSessions = useMemo(
-    () =>
-      selectedExercise ? getSessionsForExercise(selectedExercise.id) : [],
+    () => (selectedExercise ? getSessionsForExercise(selectedExercise.id) : []),
     [selectedExercise, getSessionsForExercise],
   );
 
   const editingEntry = useMemo(() => {
-    if (!exerciseId) return null;
+    if (!entryId) return null;
     const dateKey =
       typeof selectedDate === "string" && selectedDate.trim()
         ? selectedDate.trim()
         : toDateInputValue(new Date());
     const log = workoutLogs.find((l) => l.date === dateKey);
-    return log?.entries.find((e) => e.exerciseId === exerciseId) ?? null;
-  }, [exerciseId, selectedDate, workoutLogs]);
+    return log?.entries.find((e) => e.id === entryId) ?? null;
+  }, [entryId, selectedDate, workoutLogs]);
 
   const [sessionsExpanded, setSessionsExpanded] = useState(false);
   const [visibleSessions, setVisibleSessions] = useState(3);
@@ -227,16 +266,23 @@ export default function QuickLogScreen() {
   }, [exerciseId, exercises]);
 
   useEffect(() => {
-    if (lastEntry && lastEntry.sets.length > 0) {
-      const lastDurationUnit =
-        lastEntry.sets.find((set) => set.durationUnit)?.durationUnit ??
+    if (!selectedExercise) return;
+    if (skipPrefillRef.current) {
+      skipPrefillRef.current = false;
+      return;
+    }
+    const source = editingEntry ?? lastEntry;
+    seedRowIdRef.current = null;
+    if (source && source.sets.length > 0) {
+      const sourceUnit =
+        source.sets.find((set) => set.durationUnit)?.durationUnit ??
         defaultDurationUnit;
-      setDefaultDurationUnit(lastDurationUnit);
-      const prefilled = lastEntry.sets.map((s) =>
+      setDefaultDurationUnit(sourceUnit);
+      const prefilled = source.sets.map((s) =>
         isDurationExercise
           ? makeDurationSet(
               s.duration != null ? s.duration.toString() : "30",
-              s.durationUnit ?? lastDurationUnit,
+              s.durationUnit ?? sourceUnit,
             )
           : makeSet(
               s.weight != null ? s.weight.toString() : "0",
@@ -244,9 +290,29 @@ export default function QuickLogScreen() {
             ),
       );
       setSets(prefilled);
-      setActiveSetId(prefilled[0]!.id);
+      const firstPrefillId = prefilled[0]?.id ?? "";
+      setActiveSetId(firstPrefillId);
+      lastSavedRef.current = buildSignature(
+        prefilled,
+        isDurationExercise,
+        sourceUnit,
+      );
+    } else {
+      const fresh = [
+        isDurationExercise
+          ? makeDurationSet("30", defaultDurationUnit)
+          : makeSet(),
+      ];
+      setSets(fresh);
+      setActiveSetId(fresh[0]?.id ?? "");
+      setActiveField(isDurationExercise ? "duration" : "weight");
+      lastSavedRef.current = buildSignature(
+        fresh,
+        isDurationExercise,
+        defaultDurationUnit,
+      );
     }
-  }, [isDurationExercise, lastEntry]);
+  }, [editingEntry, isDurationExercise, lastEntry, selectedExercise]);
 
   useEffect(() => {
     if (!isDurationExercise) {
@@ -263,9 +329,9 @@ export default function QuickLogScreen() {
       if (prev.length > 0 && prev[0]?.duration != null) return prev;
       return [makeDurationSet("30", defaultDurationUnit)];
     });
-    setActiveSetId((prev) => prev ?? sets[0]!.id);
+    setActiveSetId((prev) => prev || sets[0]?.id || "");
     setActiveField("duration");
-  }, [defaultDurationUnit, isDurationExercise]);
+  }, [defaultDurationUnit, isDurationExercise, sets]);
 
   useEffect(() => {
     return () => {
@@ -317,7 +383,8 @@ export default function QuickLogScreen() {
     const remaining = sets.filter((s) => s.id !== setId);
     setSets(remaining);
     if (activeSetId === setId) {
-      setActiveSetId(remaining[remaining.length - 1]!.id);
+      const nextActiveId = remaining[remaining.length - 1]?.id ?? "";
+      setActiveSetId(nextActiveId);
     }
   };
 
@@ -447,26 +514,77 @@ export default function QuickLogScreen() {
     );
   };
 
-  const handleSave = async () => {
-    if (!selectedExercise || sets.length === 0 || isSaving || saved) return;
-    setIsSaving(true);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  const stopDurationTimer = () => {
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+    durationStartedAtRef.current = null;
+    setDurationRunning(false);
+  };
+
+  const persistSets = async () => {
+    if (!selectedExercise || sets.length === 0) return;
+
+    let targetEntry = editingEntry;
+    let baseSetNumber = 0;
+
+    if (!targetEntry) {
+      const dateKey =
+        typeof selectedDate === "string" && selectedDate.trim()
+          ? selectedDate.trim()
+          : toDateInputValue(new Date());
+      targetEntry =
+        workoutLogs
+          .find((l) => l.date === dateKey)
+          ?.entries.find((e) => e.exerciseId === selectedExercise.id) ?? null;
+      baseSetNumber = targetEntry ? targetEntry.sets.length : 0;
+    }
 
     const setsData: SetEntry[] = sets.map((s, i) =>
       isDurationExercise
         ? {
-            setNumber: i + 1,
+            setNumber: baseSetNumber + i + 1,
             duration: durationToSeconds(s.duration, s.durationUnit),
             durationUnit: s.durationUnit,
           }
         : {
-            setNumber: i + 1,
+            setNumber: baseSetNumber + i + 1,
             weight: parseFloat(s.weight) || undefined,
             reps: parseInt(s.reps) || undefined,
           },
     );
 
-    try {
+    if (editingEntry) {
+      await updateWorkoutEntry(editingEntry.id, setsData);
+    } else if (targetEntry) {
+      let data = setsData;
+      const seedIsFirstRow =
+        sets.length > 1 && sets[0]?.id === seedRowIdRef.current;
+      if (seedIsFirstRow) {
+        const seed = sets[0]!;
+        const lastSet = targetEntry.sets[targetEntry.sets.length - 1];
+        const seedMatchesLast = isDurationExercise
+          ? durationToSeconds(
+              seed.duration,
+              seed.durationUnit ?? defaultDurationUnit,
+            ) === (lastSet?.duration ?? null)
+          : (parseFloat(seed.weight) || 0) === (lastSet?.weight ?? 0) &&
+            (parseInt(seed.reps) || 0) === (lastSet?.reps ?? 0);
+        if (seedMatchesLast) {
+          data = data.slice(1);
+        }
+      }
+      if (data.length > 0) {
+        const merged = [...targetEntry.sets, ...data];
+        const renumbered = merged.map((s, i) => ({
+          ...s,
+          setNumber: i + 1,
+        }));
+        await updateWorkoutEntry(targetEntry.id, renumbered);
+      }
+      seedRowIdRef.current = null;
+    } else {
       await addWorkoutEntry(
         {
           exerciseId: selectedExercise.id,
@@ -479,13 +597,55 @@ export default function QuickLogScreen() {
           ? selectedDate
           : undefined,
       );
-
-      startRest();
-      setSaved(true);
-      setTimeout(() => router.back(), 500);
-    } finally {
-      setIsSaving(false);
     }
+
+    lastSavedRef.current = buildSignature(
+      sets,
+      isDurationExercise,
+      defaultDurationUnit,
+    );
+    skipPrefillRef.current = true;
+  };
+
+  const handleSaveAndRest = async () => {
+    if (!selectedExercise || sets.length === 0 || isSaving) return;
+    const focusedSetId = activeSetId;
+    const focusedField = activeField;
+    setSavingAction("save");
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+    try {
+      await persistSets();
+      stopDurationTimer();
+      startRest();
+
+      setActiveSetId(focusedSetId);
+      setActiveField(focusedField);
+      lastSavedRef.current = buildSignature(
+        sets,
+        isDurationExercise,
+        defaultDurationUnit,
+      );
+    } finally {
+      setSavingAction(null);
+    }
+  };
+
+  const handleCompleteWorkout = async () => {
+    if (!selectedExercise || isSaving) return;
+    if (sets.length > 0 && dirty) {
+      setSavingAction("complete");
+      try {
+        await persistSets();
+      } finally {
+        setSavingAction(null);
+      }
+    }
+    stopDurationTimer();
+    skipRest();
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.dismissAll();
+    router.navigate("/");
   };
 
   const handleDeleteEntry = () => {
@@ -544,10 +704,7 @@ export default function QuickLogScreen() {
           <TouchableOpacity
             onPress={handleDeleteEntry}
             hitSlop={10}
-            style={[
-              styles.deleteHeaderBtn,
-              { borderColor: colors.border },
-            ]}
+            style={[styles.deleteHeaderBtn, { borderColor: colors.border }]}
           >
             <Feather name="trash-2" size={16} color={colors.destructive} />
           </TouchableOpacity>
@@ -583,7 +740,10 @@ export default function QuickLogScreen() {
 
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, { paddingBottom: botPad + 20 }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: botPad + 128 },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -671,44 +831,43 @@ export default function QuickLogScreen() {
 
             {sessionsExpanded && pastSessions.length > 0 && (
               <View
-                style={[
-                  styles.sessionsList,
-                  { borderColor: colors.border },
-                ]}
+                style={[styles.sessionsList, { borderColor: colors.border }]}
               >
-                {pastSessions.slice(0, visibleSessions).map((session, index) => (
-                  <View
-                    key={session.id}
-                    style={[
-                      styles.sessionRow,
-                      index > 0 && {
-                        borderTopWidth: StyleSheet.hairlineWidth,
-                        borderTopColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <Text
+                {pastSessions
+                  .slice(0, visibleSessions)
+                  .map((session, index) => (
+                    <View
+                      key={session.id}
                       style={[
-                        styles.sessionDate,
-                        { color: colors.foreground },
+                        styles.sessionRow,
+                        index > 0 && {
+                          borderTopWidth: StyleSheet.hairlineWidth,
+                          borderTopColor: colors.border,
+                        },
                       ]}
                     >
-                      {formatSessionDate(session.timestamp)}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.sessionSummary,
-                        { color: colors.mutedForeground },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {formatSessionSets(
-                        session,
-                        selectedExercise?.measurementUnit,
-                      )}
-                    </Text>
-                  </View>
-                ))}
+                      <Text
+                        style={[
+                          styles.sessionDate,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {formatSessionDate(session.timestamp)}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.sessionSummary,
+                          { color: colors.mutedForeground },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {formatSessionSets(
+                          session,
+                          selectedExercise?.measurementUnit,
+                        )}
+                      </Text>
+                    </View>
+                  ))}
 
                 {visibleSessions < pastSessions.length && (
                   <TouchableOpacity
@@ -717,21 +876,20 @@ export default function QuickLogScreen() {
                       void Haptics.impactAsync(
                         Haptics.ImpactFeedbackStyle.Light,
                       );
-                      setVisibleSessions(
-                        (prev) => prev + SESSIONS_PER_PAGE,
-                      );
+                      setVisibleSessions((prev) => prev + SESSIONS_PER_PAGE);
                     }}
-                    style={[
-                      styles.loadMore,
-                      { borderTopColor: colors.border },
-                    ]}
+                    style={[styles.loadMore, { borderTopColor: colors.border }]}
                   >
                     <Text
                       style={[styles.loadMoreText, { color: colors.primary }]}
                     >
                       Load more
                     </Text>
-                    <Feather name="chevrons-down" size={14} color={colors.primary} />
+                    <Feather
+                      name="chevrons-down"
+                      size={14}
+                      color={colors.primary}
+                    />
                   </TouchableOpacity>
                 )}
               </View>
@@ -931,108 +1089,79 @@ export default function QuickLogScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.durationTools}>
-              <TouchableOpacity
-                style={[
-                  styles.durationToolBtn,
-                  {
-                    backgroundColor: durationRunning
-                      ? colors.primary
-                      : colors.card,
-                    borderColor: colors.border,
-                  },
-                ]}
-                onPress={handleToggleDurationTimer}
-                activeOpacity={0.8}
-              >
-                <Feather
-                  name={durationRunning ? "pause" : "play"}
-                  size={14}
-                  color={
-                    durationRunning
-                      ? colors.primaryForeground
-                      : colors.foreground
-                  }
-                />
-                <Text
+            {sets.length > 0 && (
+              <View style={styles.durationTools}>
+                <TouchableOpacity
                   style={[
-                    styles.durationToolText,
+                    styles.durationToolBtn,
                     {
-                      color: durationRunning
+                      backgroundColor: durationRunning
+                        ? colors.primary
+                        : colors.card,
+                      borderColor: colors.border,
+                    },
+                  ]}
+                  onPress={handleToggleDurationTimer}
+                  activeOpacity={0.8}
+                >
+                  <Feather
+                    name={durationRunning ? "pause" : "play"}
+                    size={14}
+                    color={
+                      durationRunning
                         ? colors.primaryForeground
-                        : colors.foreground,
+                        : colors.foreground
+                    }
+                  />
+                  <Text
+                    style={[
+                      styles.durationToolText,
+                      {
+                        color: durationRunning
+                          ? colors.primaryForeground
+                          : colors.foreground,
+                      },
+                    ]}
+                  >
+                    {durationRunning ? "Stop Timer" : "Start Timer"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.durationToolBtn,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
                     },
                   ]}
+                  onPress={handleResetDurationTimer}
+                  activeOpacity={0.8}
                 >
-                  {durationRunning ? "Stop Timer" : "Start Timer"}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.durationToolBtn,
-                  { backgroundColor: colors.card, borderColor: colors.border },
-                ]}
-                onPress={handleResetDurationTimer}
-                activeOpacity={0.8}
-              >
-                <Feather
-                  name="rotate-ccw"
-                  size={14}
-                  color={colors.foreground}
-                />
-                <Text
-                  style={[
-                    styles.durationToolText,
-                    { color: colors.foreground },
-                  ]}
-                >
-                  Reset
-                </Text>
-              </TouchableOpacity>
-            </View>
+                  <Feather
+                    name="rotate-ccw"
+                    size={14}
+                    color={colors.foreground}
+                  />
+                  <Text
+                    style={[
+                      styles.durationToolText,
+                      { color: colors.foreground },
+                    ]}
+                  >
+                    Reset
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-            <View style={styles.quickRow}>
-              <Text
-                style={[styles.quickLabel, { color: colors.mutedForeground }]}
-              >
-                Quick adjust interval {activeSetIndex + 1}:
-              </Text>
-              <View style={styles.quickBtns}>
-                <TouchableOpacity
-                  style={[
-                    styles.quickBtn,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  onPress={() => shiftActiveDuration(10)}
-                  activeOpacity={0.7}
+            {sets.length > 0 && (
+              <View style={styles.quickRow}>
+                <Text
+                  style={[styles.quickLabel, { color: colors.mutedForeground }]}
                 >
-                  <Text
-                    style={[styles.quickBtnText, { color: colors.foreground }]}
-                  >
-                    +10s
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.quickBtn,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  onPress={() => shiftActiveDuration(60)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[styles.quickBtnText, { color: colors.foreground }]}
-                  >
-                    +1m
-                  </Text>
-                </TouchableOpacity>
-                {activeSetIndex > 0 && (
+                  Quick adjust interval {activeSetIndex + 1}:
+                </Text>
+                <View style={styles.quickBtns}>
                   <TouchableOpacity
                     style={[
                       styles.quickBtn,
@@ -1041,77 +1170,105 @@ export default function QuickLogScreen() {
                         borderColor: colors.border,
                       },
                     ]}
-                    onPress={handleCopyPrev}
+                    onPress={() => shiftActiveDuration(10)}
                     activeOpacity={0.7}
                   >
-                    <Feather name="copy" size={12} color={colors.foreground} />
                     <Text
                       style={[
                         styles.quickBtnText,
                         { color: colors.foreground },
                       ]}
                     >
-                      Copy prev
+                      +10s
                     </Text>
                   </TouchableOpacity>
-                )}
+                  <TouchableOpacity
+                    style={[
+                      styles.quickBtn,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={() => shiftActiveDuration(60)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.quickBtnText,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      +1m
+                    </Text>
+                  </TouchableOpacity>
+                  {activeSetIndex > 0 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.quickBtn,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      onPress={handleCopyPrev}
+                      activeOpacity={0.7}
+                    >
+                      <Feather
+                        name="copy"
+                        size={12}
+                        color={colors.foreground}
+                      />
+                      <Text
+                        style={[
+                          styles.quickBtnText,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        Copy prev
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
+            )}
 
             <View style={styles.numPadSection}>
-              <View style={styles.numPadLabel}>
-                <Text
-                  style={[
-                    styles.numPadTitle,
-                    { color: colors.mutedForeground },
-                  ]}
-                >
-                  Set {activeSetIndex + 1} · Duration
-                </Text>
-                <Text style={[styles.numPadValue, { color: colors.primary }]}>
-                  {activeSet?.duration ?? "30"}
-                </Text>
-              </View>
-              <NumberPad onPress={handleNumPad} />
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.saveBtn,
-                {
-                  backgroundColor:
-                    saved || isSaving ? colors.muted : colors.primary,
-                },
-              ]}
-              onPress={handleSave}
-              activeOpacity={0.85}
-              disabled={saved || isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator
-                  size="small"
-                  color={colors.primaryForeground}
-                />
+              {sets.length === 0 ? (
+                <View style={styles.numPadLabel}>
+                  <Text
+                    style={[
+                      styles.numPadTitle,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    No sets yet
+                  </Text>
+                  <Text style={[styles.numPadValue, { color: colors.primary }]}>
+                    Tap Add Interval to begin
+                  </Text>
+                </View>
               ) : (
-                <Feather
-                  name={saved ? "check-circle" : "check"}
-                  size={18}
-                  color={colors.primaryForeground}
-                />
+                <>
+                  <View style={styles.numPadLabel}>
+                    <Text
+                      style={[
+                        styles.numPadTitle,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      Set {activeSetIndex + 1} · Duration
+                    </Text>
+                    <Text
+                      style={[styles.numPadValue, { color: colors.primary }]}
+                    >
+                      {activeSet?.duration ?? "30"}
+                    </Text>
+                  </View>
+                  <NumberPad onPress={handleNumPad} />
+                </>
               )}
-              <Text
-                style={[
-                  styles.saveBtnText,
-                  { color: colors.primaryForeground },
-                ]}
-              >
-                {isSaving
-                  ? "Saving..."
-                  : saved
-                    ? "Saved!"
-                    : `Save ${sets.length} ${sets.length === 1 ? "Interval" : "Intervals"}`}
-              </Text>
-            </TouchableOpacity>
+            </View>
           </>
         )}
 
@@ -1270,48 +1427,14 @@ export default function QuickLogScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.quickRow}>
-              <Text
-                style={[styles.quickLabel, { color: colors.mutedForeground }]}
-              >
-                Quick fill set {activeSetIndex + 1}:
-              </Text>
-              <View style={styles.quickBtns}>
-                <TouchableOpacity
-                  style={[
-                    styles.quickBtn,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  onPress={() => handleQuickFill(2.5)}
-                  activeOpacity={0.7}
+            {sets.length > 0 && (
+              <View style={styles.quickRow}>
+                <Text
+                  style={[styles.quickLabel, { color: colors.mutedForeground }]}
                 >
-                  <Text
-                    style={[styles.quickBtnText, { color: colors.foreground }]}
-                  >
-                    +2.5kg
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.quickBtn,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                  onPress={() => handleQuickFill(5)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[styles.quickBtnText, { color: colors.foreground }]}
-                  >
-                    +5kg
-                  </Text>
-                </TouchableOpacity>
-                {activeSetIndex > 0 && (
+                  Quick fill set {activeSetIndex + 1}:
+                </Text>
+                <View style={styles.quickBtns}>
                   <TouchableOpacity
                     style={[
                       styles.quickBtn,
@@ -1320,80 +1443,108 @@ export default function QuickLogScreen() {
                         borderColor: colors.border,
                       },
                     ]}
-                    onPress={handleCopyPrev}
+                    onPress={() => handleQuickFill(2.5)}
                     activeOpacity={0.7}
                   >
-                    <Feather name="copy" size={12} color={colors.foreground} />
                     <Text
                       style={[
                         styles.quickBtnText,
                         { color: colors.foreground },
                       ]}
                     >
-                      Copy prev
+                      +2.5kg
                     </Text>
                   </TouchableOpacity>
-                )}
+                  <TouchableOpacity
+                    style={[
+                      styles.quickBtn,
+                      {
+                        backgroundColor: colors.card,
+                        borderColor: colors.border,
+                      },
+                    ]}
+                    onPress={() => handleQuickFill(5)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.quickBtnText,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      +5kg
+                    </Text>
+                  </TouchableOpacity>
+                  {activeSetIndex > 0 && (
+                    <TouchableOpacity
+                      style={[
+                        styles.quickBtn,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                      onPress={handleCopyPrev}
+                      activeOpacity={0.7}
+                    >
+                      <Feather
+                        name="copy"
+                        size={12}
+                        color={colors.foreground}
+                      />
+                      <Text
+                        style={[
+                          styles.quickBtnText,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        Copy prev
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
+            )}
 
             <View style={styles.numPadSection}>
-              <View style={styles.numPadLabel}>
-                <Text
-                  style={[
-                    styles.numPadTitle,
-                    { color: colors.mutedForeground },
-                  ]}
-                >
-                  Set {activeSetIndex + 1} ·
-                  {activeField === "weight" ? "Weight (kg)" : "Reps"}
-                </Text>
-                <Text style={[styles.numPadValue, { color: colors.primary }]}>
-                  {activeField === "weight"
-                    ? activeSet?.weight
-                    : activeSet?.reps}
-                </Text>
-              </View>
-              <NumberPad onPress={handleNumPad} />
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.saveBtn,
-                {
-                  backgroundColor:
-                    saved || isSaving ? colors.muted : colors.primary,
-                },
-              ]}
-              onPress={handleSave}
-              activeOpacity={0.85}
-              disabled={saved || isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator
-                  size="small"
-                  color={colors.primaryForeground}
-                />
+              {sets.length === 0 ? (
+                <View style={styles.numPadLabel}>
+                  <Text
+                    style={[
+                      styles.numPadTitle,
+                      { color: colors.mutedForeground },
+                    ]}
+                  >
+                    No sets yet
+                  </Text>
+                  <Text style={[styles.numPadValue, { color: colors.primary }]}>
+                    Tap Add Set to begin
+                  </Text>
+                </View>
               ) : (
-                <Feather
-                  name={saved ? "check-circle" : "check"}
-                  size={18}
-                  color={colors.primaryForeground}
-                />
+                <>
+                  <View style={styles.numPadLabel}>
+                    <Text
+                      style={[
+                        styles.numPadTitle,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      Set {activeSetIndex + 1} ·
+                      {activeField === "weight" ? "Weight (kg)" : "Reps"}
+                    </Text>
+                    <Text
+                      style={[styles.numPadValue, { color: colors.primary }]}
+                    >
+                      {activeField === "weight"
+                        ? activeSet?.weight
+                        : activeSet?.reps}
+                    </Text>
+                  </View>
+                  <NumberPad onPress={handleNumPad} />
+                </>
               )}
-              <Text
-                style={[
-                  styles.saveBtnText,
-                  { color: colors.primaryForeground },
-                ]}
-              >
-                {isSaving
-                  ? "Saving..."
-                  : saved
-                    ? "Saved!"
-                    : `Save ${sets.length} ${sets.length === 1 ? "Set" : "Sets"}`}
-              </Text>
-            </TouchableOpacity>
+            </View>
           </>
         )}
 
@@ -1406,6 +1557,89 @@ export default function QuickLogScreen() {
           </View>
         )}
       </ScrollView>
+
+      {selectedExercise && (
+        <View
+          style={[
+            styles.actionBar,
+            {
+              paddingBottom: botPad + 12,
+              borderTopColor: colors.border,
+              backgroundColor: colors.background,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={[
+              styles.completeBtn,
+              {
+                backgroundColor: colors.card,
+                borderColor: `${colors.accent}50`,
+              },
+            ]}
+            onPress={handleCompleteWorkout}
+            disabled={isSaving}
+            activeOpacity={0.8}
+          >
+            {savingAction === "complete" ? (
+              <ActivityIndicator size="small" color={colors.foreground} />
+            ) : (
+              <Feather name="check" size={18} color={colors.foreground} />
+            )}
+            <Text
+              style={[styles.completeBtnText, { color: colors.foreground }]}
+            >
+              {savingAction === "complete" ? "Saving..." : "Complete Workout"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.saveRestBtn,
+              {
+                backgroundColor: isSaving
+                  ? `${colors.primary}40`
+                  : colors.primary,
+              },
+            ]}
+            onPress={handleSaveAndRest}
+            disabled={isSaving || sets.length === 0}
+            activeOpacity={0.85}
+          >
+            {savingAction === "save" ? (
+              <ActivityIndicator
+                size="small"
+                color={colors.primaryForeground}
+              />
+            ) : (
+              <Feather
+                name="clock"
+                size={18}
+                color={colors.primaryForeground}
+              />
+            )}
+            <View style={styles.saveRestTextWrap}>
+              <Text
+                style={[
+                  styles.saveRestText,
+                  { color: colors.primaryForeground },
+                ]}
+              >
+                {savingAction === "save" ? "Saving..." : "Save & Rest"}
+              </Text>
+              {savingAction !== "save" && (
+                <Text
+                  style={[
+                    styles.saveRestHint,
+                    { color: colors.primaryForeground },
+                  ]}
+                >
+                  Save the set and rest
+                </Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <Modal
         visible={showPicker}
@@ -1728,6 +1962,36 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_700Bold",
     letterSpacing: 0.5,
   },
+  actionBar: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  completeBtn: {
+    flex: 1.2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  completeBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  saveRestBtn: {
+    flex: 1.2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 7,
+    borderRadius: 12,
+  },
+  saveRestText: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  saveRestTextWrap: { alignItems: "center" },
+  saveRestHint: { fontSize: 8, fontFamily: "Inter_500Medium", opacity: 0.85 },
   emptyBox: { alignItems: "center", paddingVertical: 60, gap: 12 },
   emptyText: {
     fontSize: 14,

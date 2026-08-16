@@ -57,6 +57,7 @@ function RootLayoutNav() {
           options={{ title: "Create Routine", ...darkHeader }}
         />
         <Stack.Screen name="exercise-detail" options={{ headerShown: false }} />
+        <Stack.Screen name="streak" options={{ headerShown: false }} />
         <Stack.Screen name="workout-detail" options={{ headerShown: false }} />
         <Stack.Screen
           name="edit-exercise"
