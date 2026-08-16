@@ -196,6 +196,7 @@ export default function LogScreen() {
                     pathname: "/quick-log",
                     params: {
                       exerciseId: entry.exerciseId,
+                      entryId: entry.id,
                       selectedDate: selectedDateKey,
                     },
                   });

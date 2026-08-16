@@ -2,6 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Redirect, router } from "expo-router";
+import type { Href } from "expo-router";
 import React, { useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -43,10 +44,11 @@ function getWeekWorkouts(workoutLogs: { date: string }[]) {
   const now = new Date();
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - now.getDay());
-  return workoutLogs.filter((log) => {
-    const logDate = new Date(log.date);
-    return logDate >= startOfWeek && logDate <= now;
-  }).length;
+  const startKey = toDateInputValue(startOfWeek);
+  const todayKey = toDateInputValue(now);
+  return workoutLogs.filter(
+    (log) => log.date >= startKey && log.date <= todayKey,
+  ).length;
 }
 
 const styles = StyleSheet.create({
@@ -81,24 +83,46 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
-  progressCard: {
+  streakCard: {
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  streakMain: {
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 14,
     borderWidth: 1,
     padding: 14,
     gap: 12,
   },
-  progressHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  streakIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: "center",
+    justifyContent: "center",
   },
-  progressTitle: {
+  streakInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  streakValueRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+  },
+  streakValue: {
+    fontSize: 34,
+    fontFamily: "Inter_700Bold",
+    lineHeight: 38,
+  },
+  streakUnit: {
     fontSize: 12,
     fontFamily: "Inter_700Bold",
-    letterSpacing: 1,
+    letterSpacing: 1.5,
   },
-  progressSub: {
-    fontSize: 12,
+  streakBest: {
+    fontSize: 11,
     fontFamily: "Inter_400Regular",
   },
   dotRow: {
@@ -191,6 +215,7 @@ export default function HomeScreen() {
     profile,
     todayLog,
     streak,
+    streakInfo,
     totalVolumeToday,
     workoutLogs,
     addWeightEntry,
@@ -284,6 +309,59 @@ export default function HomeScreen() {
             <Feather name="user" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
+        <View style={styles.streakCard}>
+          <TouchableOpacity
+            style={[
+              styles.streakMain,
+              {
+                backgroundColor: colors.card,
+                borderColor: `${colors.primary}20`,
+              },
+            ]}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              router.push("/streak" as Href);
+            }}
+            activeOpacity={0.8}
+          >
+            <View
+              style={[
+                styles.streakIconWrap,
+                { backgroundColor: `${colors.primary}15` },
+              ]}
+            >
+              <Feather name="zap" size={22} color={colors.primary} />
+            </View>
+            <View style={styles.streakInfo}>
+              <View style={styles.streakValueRow}>
+                <Text
+                  style={[styles.streakValue, { color: colors.foreground }]}
+                >
+                  {streak}
+                </Text>
+                <Text
+                  style={[styles.streakUnit, { color: colors.mutedForeground }]}
+                >
+                  DAY STREAK
+                </Text>
+              </View>
+              <Text
+                style={[styles.streakBest, { color: colors.mutedForeground }]}
+              >
+                {streakInfo.best > 0
+                  ? `Personal best: ${streakInfo.best} ${
+                      streakInfo.best === 1 ? "day" : "days"
+                    }`
+                  : "Start your streak with a workout"}
+              </Text>
+            </View>
+            <Feather
+              name="chevron-right"
+              size={18}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+        </View>
         <View style={styles.statsRow}>
           <StatCard
             label="Total Volume"
@@ -296,33 +374,10 @@ export default function HomeScreen() {
             accent={selectedVolume > 0}
           />
           <StatCard
-            label="Streak"
-            value={streak > 0 ? `${streak} Days` : "—"}
-          />
-          <StatCard
             label="This Week"
             value={weekWorkouts > 0 ? `${weekWorkouts}/5` : "—"}
-          />
-        </View>
-        {workoutLogs.length > 0 && (
-          <View
-            style={[
-              styles.progressCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
+            accent={weekWorkouts > 0}
           >
-            <View style={styles.progressHeader}>
-              <Text
-                style={[styles.progressTitle, { color: colors.foreground }]}
-              >
-                WEEKLY PROGRESS
-              </Text>
-              <Text
-                style={[styles.progressSub, { color: colors.mutedForeground }]}
-              >
-                {weekWorkouts} / 5 Workouts
-              </Text>
-            </View>
             <View style={styles.dotRow}>
               {[...Array(5)].map((_, i) => (
                 <View
@@ -337,8 +392,8 @@ export default function HomeScreen() {
                 />
               ))}
             </View>
-          </View>
-        )}
+          </StatCard>
+        </View>
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={[
@@ -426,6 +481,7 @@ export default function HomeScreen() {
                     pathname: "/quick-log",
                     params: {
                       exerciseId: entry.exerciseId,
+                      entryId: entry.id,
                       selectedDate: selectedDateKey,
                     },
                   })

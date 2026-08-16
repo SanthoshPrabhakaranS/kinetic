@@ -11,6 +11,8 @@ import React, {
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/context/AuthContext";
 import { DEFAULT_EXERCISES } from "@/data/defaultExercises";
+import { calcStreak, getActiveDates, getTodayKey } from "@/lib/streaks";
+import type { StreakInfo } from "@/lib/streaks";
 import type {
   Exercise,
   Routine,
@@ -24,7 +26,7 @@ import type {
 const generateId = () =>
   Date.now().toString() + Math.random().toString(36).substr(2, 9);
 
-const getTodayDate = () => new Date().toISOString().split("T")[0]!;
+const getTodayDate = () => getTodayKey();
 
 const normalizeDateKey = (value?: string) => {
   if (typeof value === "string" && value.trim()) {
@@ -240,6 +242,7 @@ interface WorkoutContextValue {
   weightLogs: WeightEntry[];
   todayLog: WorkoutLog | null;
   streak: number;
+  streakInfo: StreakInfo;
   totalVolumeToday: number;
   lastWeight: number | null;
   weeklyWeightChange: number | null;
@@ -1045,18 +1048,12 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     return workoutLogs.find((l) => l.date === today) ?? null;
   }, [workoutLogs]);
 
-  const streak = useMemo(() => {
-    let count = 0;
-    const today = new Date();
-    for (let i = 1; i <= 365; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split("T")[0]!;
-      if (workoutLogs.some((l) => l.date === dateStr)) count++;
-      else break;
-    }
-    return count;
-  }, [workoutLogs]);
+  const streakInfo = useMemo(
+    () => calcStreak(getActiveDates(workoutLogs)),
+    [workoutLogs],
+  );
+
+  const streak = streakInfo.current;
 
   const totalVolumeToday = useMemo(() => {
     if (!todayLog) return 0;
@@ -1094,6 +1091,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       weightLogs,
       todayLog,
       streak,
+      streakInfo,
       totalVolumeToday,
       lastWeight,
       isReady,
@@ -1133,6 +1131,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       profile,
       routines,
       streak,
+      streakInfo,
       todayLog,
       totalVolumeToday,
       deleteExercise,

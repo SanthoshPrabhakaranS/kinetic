@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LogWeightModal } from "@/components/LogWeightModal";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
+import { toDateKey } from "@/lib/streaks";
 import {
   convertWeight,
   formatWeight,
@@ -30,7 +31,7 @@ function getWeekVolumes(logs: WorkoutLog[]) {
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const dateStr = d.toISOString().split("T")[0]!;
+    const dateStr = toDateKey(d);
     const label = d.toLocaleDateString("en-US", { weekday: "short" });
     const log = logs.find((l) => l.date === dateStr);
     const volume = log
