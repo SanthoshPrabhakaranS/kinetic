@@ -1,9 +1,12 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useMemo, useState } from "react";
 import {
   Alert,
+  FlatList,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,10 +15,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ExercisePicker } from "@/components/ExercisePicker";
 import { LogWeightModal } from "@/components/LogWeightModal";
+import { ProgressLineChart } from "@/components/ProgressLineChart";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
 import { toDateKey } from "@/lib/streaks";
+import {
+  calcConsistency,
+  getExerciseProgress,
+  getTopExercises,
+} from "@/lib/stats";
 import {
   convertWeight,
   formatWeight,
@@ -110,11 +120,9 @@ function WeightEntryRow({
     year: "numeric",
   });
 
-  const displayWeight =
-    unit === "kg" ? entry.weight : kgToLbs(entry.weight);
+  const displayWeight = unit === "kg" ? entry.weight : kgToLbs(entry.weight);
   const rawDelta = prevWeight != null ? entry.weight - prevWeight : null;
-  const delta =
-    rawDelta != null ? convertWeight(rawDelta, "kg", unit) : null;
+  const delta = rawDelta != null ? convertWeight(rawDelta, "kg", unit) : null;
   const isLoss = delta != null && delta < 0;
   const isGain = delta != null && delta > 0;
   const deltaColor = isLoss
@@ -174,6 +182,7 @@ export default function ProgressScreen() {
     weightLogs,
     lastWeight,
     weeklyWeightChange,
+    streakInfo,
     addWeightEntry,
     deleteWeightEntry,
     profile,
@@ -186,6 +195,10 @@ export default function ProgressScreen() {
   const [visiblePrLimit, setVisiblePrLimit] = useState(10);
   const [isWeightExpanded, setIsWeightExpanded] = useState(false);
   const [isPrExpanded, setIsPrExpanded] = useState(false);
+  const [selectedExerciseId, setSelectedExerciseId] = useState<string | null>(
+    null,
+  );
+  const [showDetail, setShowDetail] = useState(false);
 
   const weekData = useMemo(() => getWeekVolumes(workoutLogs), [workoutLogs]);
   const prs = useMemo(() => getPersonalRecords(workoutLogs), [workoutLogs]);
@@ -194,6 +207,51 @@ export default function ProgressScreen() {
     () => groupWeightByMonth(weightLogs),
     [weightLogs],
   );
+
+  const consistency = useMemo(
+    () => calcConsistency(workoutLogs),
+    [workoutLogs],
+  );
+  const topExercises = useMemo(
+    () => getTopExercises(workoutLogs),
+    [workoutLogs],
+  );
+  const activeExerciseId = useMemo(() => {
+    if (selectedExerciseId) return selectedExerciseId;
+    return topExercises.length > 0 ? topExercises[0]!.id : null;
+  }, [selectedExerciseId, topExercises]);
+  const exerciseProgress = useMemo(
+    () =>
+      activeExerciseId
+        ? getExerciseProgress(workoutLogs, activeExerciseId)
+        : [],
+    [workoutLogs, activeExerciseId],
+  );
+  const activeExerciseName = useMemo(
+    () => topExercises.find((e) => e.id === activeExerciseId)?.name ?? "",
+    [topExercises, activeExerciseId],
+  );
+
+  const detailTrend = useMemo(() => {
+    if (exerciseProgress.length < 2) return null;
+    const first = exerciseProgress[0]!;
+    const last = exerciseProgress[exerciseProgress.length - 1]!;
+    const delta = last.bestWeight - first.bestWeight;
+    const pct = first.bestWeight > 0 ? (delta / first.bestWeight) * 100 : 0;
+    return {
+      firstWeight: first.bestWeight,
+      lastWeight: last.bestWeight,
+      delta,
+      pct: Math.abs(Math.round(pct)),
+      direction:
+        delta > 0
+          ? ("up" as const)
+          : delta < 0
+            ? ("down" as const)
+            : ("flat" as const),
+      weeks: exerciseProgress.length,
+    };
+  }, [exerciseProgress]);
 
   const totalWorkouts = workoutLogs.length;
   const visibleWeightGroups = useMemo(() => {
@@ -260,56 +318,305 @@ export default function ProgressScreen() {
           Progress
         </Text>
 
-        <View style={styles.overallRow}>
-          <View
-            style={[
-              styles.overallCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Feather name="activity" size={18} color={colors.primary} />
-            <Text style={[styles.overallValue, { color: colors.foreground }]}>
-              {totalWorkouts}
-            </Text>
-            <Text
-              style={[styles.overallLabel, { color: colors.mutedForeground }]}
+        <View style={styles.statGrid}>
+          <View style={styles.statRow}>
+            <View
+              style={[
+                styles.statCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
             >
-              Workouts
-            </Text>
+              <Feather name="activity" size={16} color={colors.primary} />
+              <Text style={[styles.statValue, { color: colors.foreground }]}>
+                {totalWorkouts}
+              </Text>
+              <Text
+                style={[styles.statLabel, { color: colors.mutedForeground }]}
+              >
+                Workouts
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.statCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Feather name="calendar" size={16} color={colors.primary} />
+              <Text style={[styles.statValue, { color: colors.foreground }]}>
+                {consistency.percentage}%
+              </Text>
+              <Text
+                style={[styles.statLabel, { color: colors.mutedForeground }]}
+              >
+                Consistency
+              </Text>
+            </View>
           </View>
-          <View
-            style={[
-              styles.overallCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Feather name="trending-up" size={18} color={colors.primary} />
-            <Text style={[styles.overallValue, { color: colors.foreground }]}>
-              {Math.round(totalVolume / 1000)}k
-            </Text>
-            <Text
-              style={[styles.overallLabel, { color: colors.mutedForeground }]}
+          <View style={styles.statRow}>
+            <View
+              style={[
+                styles.statCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
             >
-              kg Total
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.overallCard,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Feather name="award" size={18} color={colors.primary} />
-            <Text style={[styles.overallValue, { color: colors.foreground }]}>
-              {prs.length}
-            </Text>
-            <Text
-              style={[styles.overallLabel, { color: colors.mutedForeground }]}
+              <Ionicons name="flame" size={16} color={colors.primary} />
+              <Text style={[styles.statValue, { color: colors.foreground }]}>
+                {streakInfo.best}
+              </Text>
+              <Text
+                style={[styles.statLabel, { color: colors.mutedForeground }]}
+              >
+                Best Streak
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.statCard,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
             >
-              PRs Set
-            </Text>
+              <Feather name="trending-up" size={16} color={colors.primary} />
+              <Text style={[styles.statValue, { color: colors.foreground }]}>
+                {Math.round(totalVolume / 1000)}k
+              </Text>
+              <Text
+                style={[styles.statLabel, { color: colors.mutedForeground }]}
+              >
+                kg Total
+              </Text>
+            </View>
           </View>
         </View>
+
+        {topExercises.length > 0 && (
+          <View
+            style={[
+              styles.section,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.sectionTitleV2, { color: colors.foreground }]}>
+              Exercise Progress
+            </Text>
+            <ExercisePicker
+              exercises={topExercises}
+              selectedId={activeExerciseId}
+              onSelect={setSelectedExerciseId}
+            />
+            {exerciseProgress.length > 0 ? (
+              <View style={{ paddingBottom: 12 }}>
+                <ProgressLineChart
+                  data={exerciseProgress.map((p) => ({
+                    label: p.weekLabel,
+                    value: p.bestWeight,
+                  }))}
+                  yUnit="kg"
+                  onPress={() => setShowDetail(true)}
+                />
+                <Text
+                  style={[styles.tapHint, { color: colors.mutedForeground }]}
+                >
+                  Tap chart for details
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.emptyChart}>
+                <Text
+                  style={[styles.emptyText, { color: colors.mutedForeground }]}
+                >
+                  Log workouts with {activeExerciseName} to see progress
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        <Modal
+          visible={showDetail}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowDetail(false)}
+        >
+          <Pressable
+            style={styles.detailOverlay}
+            onPress={() => setShowDetail(false)}
+          >
+            <Pressable
+              style={[
+                styles.detailSheet,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                },
+              ]}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View
+                style={[
+                  styles.detailHandle,
+                  { backgroundColor: colors.mutedForeground },
+                ]}
+              />
+              <Text
+                style={[styles.detailTitle, { color: colors.foreground }]}
+                numberOfLines={1}
+              >
+                {activeExerciseName}
+              </Text>
+
+              {detailTrend && (
+                <View
+                  style={[
+                    styles.trendCard,
+                    {
+                      backgroundColor:
+                        detailTrend.direction === "up"
+                          ? "#0f2e1a"
+                          : detailTrend.direction === "down"
+                            ? "#2e0f1a"
+                            : colors.muted,
+                      borderColor:
+                        detailTrend.direction === "up"
+                          ? "#16a34a"
+                          : detailTrend.direction === "down"
+                            ? "#dc2626"
+                            : colors.border,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontSize: 24,
+                    }}
+                  >
+                    {detailTrend.direction === "up"
+                      ? "📈"
+                      : detailTrend.direction === "down"
+                        ? "📉"
+                        : "➡️"}
+                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.trendLabel,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      {detailTrend.direction === "up"
+                        ? "Increased"
+                        : detailTrend.direction === "down"
+                          ? "Decreased"
+                          : "No change"}{" "}
+                      by {detailTrend.pct}% over {detailTrend.weeks} weeks
+                    </Text>
+                    <Text
+                      style={[styles.trendValues, { color: colors.foreground }]}
+                    >
+                      {detailTrend.firstWeight}kg → {detailTrend.lastWeight}kg
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              <View style={styles.detailHeader}>
+                <Text
+                  style={[
+                    styles.detailColLabel,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Week
+                </Text>
+                <Text
+                  style={[
+                    styles.detailColLabel,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Weight
+                </Text>
+                <Text
+                  style={[
+                    styles.detailColLabel,
+                    { color: colors.mutedForeground },
+                  ]}
+                >
+                  Change
+                </Text>
+              </View>
+
+              <FlatList
+                data={exerciseProgress}
+                keyExtractor={(_, i) => String(i)}
+                renderItem={({ item, index }) => {
+                  const prev = index > 0 ? exerciseProgress[index - 1] : null;
+                  const delta = prev ? item.bestWeight - prev.bestWeight : null;
+                  const isUp = delta != null && delta > 0;
+                  const isDown = delta != null && delta < 0;
+                  return (
+                    <View
+                      style={[
+                        styles.detailRow,
+                        {
+                          borderBottomColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.detailWeek,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {item.weekLabel}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.detailWeight,
+                          { color: colors.foreground },
+                        ]}
+                      >
+                        {item.bestWeight}kg
+                      </Text>
+                      {delta != null ? (
+                        <View
+                          style={[
+                            styles.detailDelta,
+                            {
+                              backgroundColor: isUp
+                                ? "#16a34a20"
+                                : isDown
+                                  ? "#dc262620"
+                                  : colors.muted,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              color: isUp
+                                ? "#4ade80"
+                                : isDown
+                                  ? "#f87171"
+                                  : colors.mutedForeground,
+                              fontFamily: "Inter_600SemiBold",
+                            }}
+                          >
+                            {isUp ? "+" : ""}
+                            {delta}kg
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.detailDelta} />
+                      )}
+                    </View>
+                  );
+                }}
+              />
+            </Pressable>
+          </Pressable>
+        </Modal>
 
         <View
           style={[
@@ -644,8 +951,9 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, gap: 16 },
   title: { fontSize: 28, fontFamily: "Inter_700Bold" },
 
-  overallRow: { flexDirection: "row", gap: 10 },
-  overallCard: {
+  statGrid: { gap: 10 },
+  statRow: { flexDirection: "row", gap: 10 },
+  statCard: {
     flex: 1,
     borderRadius: 12,
     borderWidth: 1,
@@ -653,8 +961,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  overallValue: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  overallLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  statValue: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
 
   currentWeightCard: {
     borderRadius: 14,
@@ -837,5 +1145,97 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+  },
+
+  tapHint: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    paddingTop: 10,
+    paddingBottom: 2,
+  },
+  detailOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  detailSheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderWidth: 1,
+    maxHeight: "70%",
+    paddingBottom: 16,
+  },
+  detailHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 6,
+    opacity: 0.4,
+  },
+  detailTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_700Bold",
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 10,
+  },
+  trendCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 16,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 12,
+  },
+  trendLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  trendValues: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    marginTop: 2,
+  },
+  detailHeader: {
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 2,
+  },
+  detailColLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.5,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  detailWeek: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  detailWeight: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "center",
+  },
+  detailDelta: {
+    flex: 1,
+    alignItems: "flex-end",
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
 });

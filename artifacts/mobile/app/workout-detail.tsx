@@ -1,7 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -243,34 +246,69 @@ export default function WorkoutDetailScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { logId } = useLocalSearchParams<{ logId: string }>();
-  const { getLogById } = useWorkout();
+  const { getLogById, deleteWorkoutLog } = useWorkout();
+  const [deleting, setDeleting] = useState(false);
 
   const log = getLogById(logId);
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  if (!log) {
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={[styles.notFound, { color: colors.mutedForeground }]}>
-          Workout not found
-        </Text>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.backLink, { color: colors.primary }]}>
-            Go back
-          </Text>
-        </TouchableOpacity>
-      </View>
+  const handleDeleteLog = () => {
+    if (!log) return;
+    Alert.alert(
+      "Delete Workout",
+      "This will permanently delete this workout log.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => setDeleting(true),
+        },
+      ],
     );
-  }
+  };
 
-  const totalVolume = log.entries.reduce(
-    (t, e) => t + e.sets.reduce((s, set) => s + (set.weight ?? 0), 0),
-    0,
-  );
+  useEffect(() => {
+    if (!deleting) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await deleteWorkoutLog(logId);
+        if (!cancelled) router.back();
+      } finally {
+        if (!cancelled) setDeleting(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deleting, deleteWorkoutLog, logId]);
+
+  const totalVolume = log
+    ? log.entries.reduce(
+        (t, e) => t + e.sets.reduce((s, set) => s + (set.weight ?? 0), 0),
+        0,
+      )
+    : 0;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
+      <Modal transparent visible={deleting} animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <View
+            style={[styles.loadingCard, { backgroundColor: colors.card }]}
+          >
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.loadingText, { color: colors.foreground }]}>
+              Deleting log...
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {log ? (
+        <>
+          <View style={[styles.header, { borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={12}>
           <Feather name="arrow-left" size={22} color={colors.foreground} />
         </TouchableOpacity>
@@ -283,6 +321,9 @@ export default function WorkoutDetailScreen() {
             {Math.round(totalVolume).toLocaleString()} kg total
           </Text>
         </View>
+        <TouchableOpacity onPress={handleDeleteLog} hitSlop={12}>
+          <Feather name="trash-2" size={20} color={colors.destructive} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -343,7 +384,20 @@ export default function WorkoutDetailScreen() {
         {log.entries.map((entry) => (
           <EntryCard key={entry.id} entry={entry} />
         ))}
-      </ScrollView>
+        </ScrollView>
+        </>
+      ) : (
+        <View style={[styles.center, { backgroundColor: colors.background }]}>
+          <Text style={[styles.notFound, { color: colors.mutedForeground }]}>
+            Workout not found
+          </Text>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Text style={[styles.backLink, { color: colors.primary }]}>
+              Go back
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -365,6 +419,20 @@ const styles = StyleSheet.create({
   headerCenter: { flex: 1, gap: 2 },
   headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   headerSub: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  loadingOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  loadingCard: {
+    paddingHorizontal: 28,
+    paddingVertical: 24,
+    borderRadius: 14,
+    alignItems: "center",
+    gap: 12,
+  },
+  loadingText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   content: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
   overviewRow: { flexDirection: "row", gap: 10 },
   overviewCard: {

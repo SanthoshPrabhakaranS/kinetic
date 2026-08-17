@@ -260,6 +260,7 @@ interface WorkoutContextValue {
   ) => Promise<void>;
   updateWorkoutEntry: (entryId: string, sets: SetEntry[]) => Promise<void>;
   deleteWorkoutEntry: (entryId: string) => Promise<void>;
+  deleteWorkoutLog: (logId: string) => Promise<void>;
   getEntryById: (entryId: string) => WorkoutEntry | null;
   getLogById: (logId: string) => WorkoutLog | null;
   getLastEntryForExercise: (exerciseId: string) => WorkoutEntry | null;
@@ -928,6 +929,21 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     [exercises, profile, routines, sync, weightLogs, workoutLogs],
   );
 
+  const deleteWorkoutLog = useCallback(
+    async (logId: string) => {
+      const updatedLogs = workoutLogs.filter((log) => log.id !== logId);
+      setWorkoutLogs(updatedLogs);
+      await sync({
+        profile,
+        exercises,
+        workoutLogs: updatedLogs,
+        routines,
+        weightLogs,
+      });
+    },
+    [exercises, profile, routines, sync, weightLogs, workoutLogs],
+  );
+
   const getEntryById = useCallback(
     (entryId: string): WorkoutEntry | null => {
       for (const log of workoutLogs) {
@@ -1103,6 +1119,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       addWorkoutEntry,
       updateWorkoutEntry,
       deleteWorkoutEntry,
+      deleteWorkoutLog,
       getEntryById,
       getLogById,
       getLastEntryForExercise,
@@ -1119,6 +1136,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       addWorkoutEntry,
       deleteWeightEntry,
       deleteWorkoutEntry,
+      deleteWorkoutLog,
       exercises,
       getBestSetForExercise,
       getEntryById,

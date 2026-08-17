@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
 import { Redirect, router } from "expo-router";
@@ -330,7 +330,7 @@ export default function HomeScreen() {
                 { backgroundColor: `${colors.primary}15` },
               ]}
             >
-              <Feather name="zap" size={22} color={colors.primary} />
+              <Ionicons name="flame" size={22} color={colors.primary} />
             </View>
             <View style={styles.streakInfo}>
               <View style={styles.streakValueRow}>
