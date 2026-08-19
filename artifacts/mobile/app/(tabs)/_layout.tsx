@@ -9,6 +9,7 @@ import { Platform, StyleSheet, View } from "react-native";
 
 import { useTheme } from "@/context/ThemeContext";
 import { useColors } from "@/hooks/useColors";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function NativeTabLayout() {
   return (
@@ -44,8 +45,10 @@ function NativeTabLayout() {
 function ClassicTabLayout() {
   const colors = useColors();
   const { isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const bottomInset = isWeb ? 0 : insets.bottom;
 
   return (
     <Tabs
@@ -59,8 +62,8 @@ function ClassicTabLayout() {
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
-          height: isWeb ? 84 : 60,
-          paddingBottom: isWeb ? 34 : 8,
+          height: isWeb ? 84 : 60 + bottomInset,
+          paddingBottom: isWeb ? 34 : 8 + bottomInset,
         },
         tabBarBackground: () =>
           isIOS ? (

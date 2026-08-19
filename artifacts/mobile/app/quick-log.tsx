@@ -1,5 +1,6 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { shareAsync } from "expo-sharing";
 import { router, useLocalSearchParams } from "expo-router";
 import React, {
   useCallback,
@@ -21,6 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import ViewShot from "react-native-view-shot";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { NumberPad } from "@/components/NumberPad";
@@ -194,6 +196,7 @@ export default function QuickLogScreen() {
     deleteWorkoutEntry,
     getLastEntryForExercise,
     getSessionsForExercise,
+    getBestSetForExercise,
   } = useWorkout();
   const { startRest, skip: skipRest, active: restActive } = useRestTimer();
 
@@ -222,6 +225,16 @@ export default function QuickLogScreen() {
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
+  const prCardRef = useRef<any>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const pendingRestAfterPrRef = useRef(false);
+
+  const [prResult, setPrResult] = useState<{
+    exerciseName: string;
+    newWeight: number;
+    newReps: number | null;
+    oldWeight: number | null;
+  } | null>(null);
 
   const isDurationExercise = selectedExercise?.measurementUnit === "Duration";
 
@@ -614,10 +627,44 @@ export default function QuickLogScreen() {
     setSavingAction("save");
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+    const prevBest = isDurationExercise
+      ? null
+      : getBestSetForExercise(selectedExercise.id);
+
+    let detectedPr = false;
+
     try {
       await persistSets();
       stopDurationTimer();
-      startRest();
+
+      if (!isDurationExercise && sets.length > 0) {
+        const maxWeight = Math.max(
+          ...sets.map((s) => parseFloat(s.weight) || 0),
+        );
+        if (
+          maxWeight > 0 &&
+          (prevBest == null || maxWeight > (prevBest.weight ?? 0))
+        ) {
+          detectedPr = true;
+          pendingRestAfterPrRef.current = true;
+          const bestSet = sets.find(
+            (s) => (parseFloat(s.weight) || 0) === maxWeight,
+          );
+          void Haptics.notificationAsync(
+            Haptics.NotificationFeedbackType.Success,
+          );
+          setPrResult({
+            exerciseName: selectedExercise.name,
+            newWeight: maxWeight,
+            newReps: bestSet ? parseInt(bestSet.reps) || null : null,
+            oldWeight: prevBest?.weight ?? null,
+          });
+        }
+      }
+
+      if (!detectedPr) {
+        startRest();
+      }
 
       setActiveSetId(focusedSetId);
       setActiveField(focusedField);
@@ -633,6 +680,12 @@ export default function QuickLogScreen() {
 
   const handleCompleteWorkout = async () => {
     if (!selectedExercise || isSaving) return;
+
+    const prevBest =
+      !isDurationExercise && sets.length > 0
+        ? getBestSetForExercise(selectedExercise.id)
+        : null;
+
     if (sets.length > 0 && dirty) {
       setSavingAction("complete");
       try {
@@ -641,11 +694,45 @@ export default function QuickLogScreen() {
         setSavingAction(null);
       }
     }
+
+    if (!isDurationExercise && sets.length > 0) {
+      const maxWeight = Math.max(...sets.map((s) => parseFloat(s.weight) || 0));
+      if (
+        maxWeight > 0 &&
+        (prevBest == null || maxWeight > (prevBest.weight ?? 0))
+      ) {
+        const bestSet = sets.find(
+          (s) => (parseFloat(s.weight) || 0) === maxWeight,
+        );
+        setPrResult({
+          exerciseName: selectedExercise.name,
+          newWeight: maxWeight,
+          newReps: bestSet ? parseInt(bestSet.reps) || null : null,
+          oldWeight: prevBest?.weight ?? null,
+        });
+      }
+    }
+
     stopDurationTimer();
     skipRest();
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.dismissAll();
     router.navigate("/");
+  };
+
+  const handleSharePr = async () => {
+    if (!prCardRef.current?.capture || isSharing) return;
+    setIsSharing(true);
+    try {
+      const uri = await prCardRef.current.capture();
+      await shareAsync(uri, {
+        mimeType: "image/png",
+        dialogTitle: "Check out my new PR!",
+      });
+    } catch {
+    } finally {
+      setIsSharing(false);
+    }
   };
 
   const handleDeleteEntry = () => {
@@ -1735,6 +1822,124 @@ export default function QuickLogScreen() {
           />
         </View>
       </Modal>
+
+      <Modal
+        visible={prResult != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setPrResult(null);
+          if (pendingRestAfterPrRef.current) {
+            pendingRestAfterPrRef.current = false;
+            startRest();
+          }
+        }}
+      >
+        <View style={styles.prOverlay}>
+          <ViewShot ref={prCardRef} options={{ format: "png", quality: 1 }}>
+            <View
+              style={[
+                styles.prCard,
+                {
+                  backgroundColor: colors.card,
+                  borderColor: "#F59E0B",
+                },
+              ]}
+            >
+              <View style={styles.prGlow} />
+              <Ionicons name="trophy" size={48} color="#F59E0B" />
+              <Text style={[styles.prBadge, { color: "#F59E0B" }]}>
+                NEW PERSONAL RECORD
+              </Text>
+              <Text
+                style={[styles.prExerciseName, { color: colors.foreground }]}
+                numberOfLines={1}
+              >
+                {prResult?.exerciseName}
+              </Text>
+              <Text style={[styles.prWeight, { color: colors.foreground }]}>
+                {prResult?.newWeight} kg
+                {prResult?.newReps != null
+                  ? ` × ${prResult.newReps} reps`
+                  : ""}
+              </Text>
+              {prResult?.oldWeight != null && (
+                <Text
+                  style={[styles.prOld, { color: colors.mutedForeground }]}
+                >
+                  was {prResult.oldWeight} kg
+                </Text>
+              )}
+              {prResult?.oldWeight != null && prResult.oldWeight > 0 && (
+                <View style={styles.prDeltaRow}>
+                  <View style={styles.prProgressBar}>
+                    <View
+                      style={[
+                        styles.prProgressFill,
+                        {
+                          width: `${Math.min(
+                            100,
+                            Math.round(
+                              ((prResult.newWeight - prResult.oldWeight) /
+                                prResult.oldWeight) *
+                                100,
+                            ) * 3,
+                          )}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={[styles.prDeltaText, { color: "#4ade80" }]}>
+                    +
+                    {Math.round(
+                      ((prResult.newWeight - prResult.oldWeight) /
+                        prResult.oldWeight) *
+                        100,
+                    )}
+                    %
+                  </Text>
+                </View>
+              )}
+            </View>
+          </ViewShot>
+
+          <View style={styles.prActions}>
+            <TouchableOpacity
+              style={[styles.prCloseBtn, { borderColor: colors.border }]}
+              onPress={() => {
+                setPrResult(null);
+                if (pendingRestAfterPrRef.current) {
+                  pendingRestAfterPrRef.current = false;
+                  startRest();
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.prCloseText, { color: colors.foreground }]}>
+                Close
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.prShareBtn,
+                { backgroundColor: "#F59E0B", opacity: isSharing ? 0.6 : 1 },
+              ]}
+              onPress={handleSharePr}
+              disabled={isSharing}
+              activeOpacity={0.7}
+            >
+              {isSharing ? (
+                <ActivityIndicator size="small" color="#000" />
+              ) : (
+                <Feather name="share" size={16} color="#000" />
+              )}
+              <Text style={[styles.prShareText]}>
+                {isSharing ? "Sharing..." : "Share"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2032,4 +2237,113 @@ const styles = StyleSheet.create({
   modalItemInfo: { flex: 1, gap: 3 },
   modalItemName: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   modalItemMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
+
+  prOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 32,
+  },
+  prCard: {
+    width: "100%",
+    maxWidth: 320,
+    borderRadius: 20,
+    borderWidth: 2,
+    paddingVertical: 32,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    gap: 8,
+    overflow: "hidden",
+  },
+  prGlow: {
+    position: "absolute",
+    top: -40,
+    left: "50%",
+    marginLeft: -80,
+    width: 160,
+    height: 80,
+    borderRadius: 80,
+    backgroundColor: "#F59E0B",
+    opacity: 0.12,
+  },
+  prBadge: {
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 2,
+    marginTop: 4,
+  },
+  prExerciseName: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+    marginTop: 8,
+  },
+  prWeight: {
+    fontSize: 32,
+    fontFamily: "Inter_700Bold",
+  },
+  prOld: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    marginTop: 2,
+  },
+  prDeltaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 6,
+    width: "100%",
+    paddingHorizontal: 16,
+  },
+  prProgressBar: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(128,128,128,0.15)",
+    overflow: "hidden",
+  },
+  prProgressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: "#4ade80",
+  },
+  prDeltaText: {
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+    minWidth: 40,
+    textAlign: "right",
+  },
+  prActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 20,
+    width: "100%",
+    maxWidth: 320,
+  },
+  prCloseBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  prCloseText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  prShareBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 6,
+  },
+  prShareText: {
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
+    color: "#000",
+  },
 });

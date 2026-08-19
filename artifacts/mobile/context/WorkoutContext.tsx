@@ -40,6 +40,8 @@ const DEFAULT_PROFILE: UserProfile = {
   onboardingComplete: false,
   selectedRoutineType: null,
   weightUnit: "kg",
+  targetWeight: null,
+  weightGoalType: null,
 };
 
 const PROFILE_TABLE = "user_profiles";
@@ -246,6 +248,9 @@ interface WorkoutContextValue {
   totalVolumeToday: number;
   lastWeight: number | null;
   weeklyWeightChange: number | null;
+  weightGoalDirection: "loss" | "gain" | null;
+  weightDeltaToGoal: number | null;
+  weightGoalProgress: number | null;
   isReady: boolean;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
   addExercise: (exercise: Omit<Exercise, "id" | "isCustom">) => Promise<void>;
@@ -319,6 +324,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             onboarding_complete: payload.profile.onboardingComplete,
             selected_routine_type: payload.profile.selectedRoutineType,
             weight_unit: payload.profile.weightUnit,
+            target_weight: payload.profile.targetWeight,
+            weight_goal_type: payload.profile.weightGoalType,
           },
           { onConflict: "user_id" },
         );
@@ -654,6 +661,15 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
               onboardingComplete: Boolean(profileData.onboarding_complete),
               selectedRoutineType: profileData.selected_routine_type ?? null,
               weightUnit: profileData.weight_unit === "lbs" ? "lbs" : "kg",
+              targetWeight:
+                profileData.target_weight != null
+                  ? Number(profileData.target_weight)
+                  : null,
+              weightGoalType:
+                profileData.weight_goal_type === "loss" ||
+                profileData.weight_goal_type === "gain"
+                  ? profileData.weight_goal_type
+                  : null,
             }
           : googleProfile;
 
@@ -1097,6 +1113,30 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     return Math.round((latest.weight - baseline.weight) * 10) / 10;
   }, [weightLogs]);
 
+  const weightGoalDirection: "loss" | "gain" | null = useMemo(() => {
+    return profile.weightGoalType ?? null;
+  }, [profile.weightGoalType]);
+
+  const weightDeltaToGoal: number | null = useMemo(() => {
+    if (lastWeight == null || profile.targetWeight == null) return null;
+    return Math.round((lastWeight - profile.targetWeight) * 10) / 10;
+  }, [lastWeight, profile.targetWeight]);
+
+  const weightGoalProgress: number | null = useMemo(() => {
+    if (
+      lastWeight == null ||
+      profile.targetWeight == null ||
+      profile.weightGoalType == null ||
+      weightLogs.length < 2
+    )
+      return null;
+    const startWeight = weightLogs[weightLogs.length - 1]!.weight;
+    const totalDistance = Math.abs(profile.targetWeight - startWeight);
+    if (totalDistance === 0) return 100;
+    const covered = Math.abs(startWeight - lastWeight);
+    return Math.min(Math.round((covered / totalDistance) * 100), 100);
+  }, [lastWeight, profile.targetWeight, profile.weightGoalType, weightLogs]);
+
   const value = useMemo<WorkoutContextValue>(
     () => ({
       loading,
@@ -1112,6 +1152,9 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       lastWeight,
       isReady,
       weeklyWeightChange,
+      weightGoalDirection,
+      weightDeltaToGoal,
+      weightGoalProgress,
       updateProfile,
       addExercise,
       updateExercise,
@@ -1157,6 +1200,9 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       updateProfile,
       updateWorkoutEntry,
       weeklyWeightChange,
+      weightDeltaToGoal,
+      weightGoalDirection,
+      weightGoalProgress,
       weightLogs,
       workoutLogs,
     ],

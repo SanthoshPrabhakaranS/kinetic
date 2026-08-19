@@ -200,6 +200,17 @@ const styles = StyleSheet.create({
   summaryList: {
     borderTopWidth: 1,
   },
+  moreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 4,
+  },
+  moreText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
   pickerWrap: {
     alignItems: "center",
     justifyContent: "center",
@@ -488,6 +499,24 @@ export default function HomeScreen() {
                 }
               />
             ))}
+            {selectedLog.entries.length > 5 && (
+              <TouchableOpacity
+                style={styles.moreRow}
+                onPress={() =>
+                  router.push({
+                    pathname: "/(tabs)/log",
+                    params: { selectedDate: selectedDateKey },
+                  })
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.moreText, { color: colors.primary }]}>
+                  +{selectedLog.entries.length - 5} more{" "}
+                  {selectedLog.entries.length - 5 === 1 ? "exercise" : "exercises"}
+                </Text>
+                <Feather name="chevron-right" size={14} color={colors.primary} />
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>

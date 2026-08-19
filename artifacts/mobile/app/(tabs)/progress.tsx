@@ -31,6 +31,7 @@ import {
   formatWeight,
   formatWeightDelta,
   kgToLbs,
+  lbsToKg,
   type WeightUnit,
 } from "@/lib/weightUnits";
 import type { WeightEntry, WorkoutLog } from "@/types/workout";
@@ -183,8 +184,12 @@ export default function ProgressScreen() {
     lastWeight,
     weeklyWeightChange,
     streakInfo,
+    weightGoalDirection,
+    weightDeltaToGoal,
+    weightGoalProgress,
     addWeightEntry,
     deleteWeightEntry,
+    updateProfile,
     profile,
   } = useWorkout();
 
@@ -199,6 +204,12 @@ export default function ProgressScreen() {
     null,
   );
   const [showDetail, setShowDetail] = useState(false);
+  const [showTargetModal, setShowTargetModal] = useState(false);
+  const [targetInput, setTargetInput] = useState("");
+  const [targetKeypadActive, setTargetKeypadActive] = useState(false);
+  const [goalTypeInput, setGoalTypeInput] = useState<"loss" | "gain" | null>(
+    null,
+  );
 
   const weekData = useMemo(() => getWeekVolumes(workoutLogs), [workoutLogs]);
   const prs = useMemo(() => getPersonalRecords(workoutLogs), [workoutLogs]);
@@ -299,11 +310,18 @@ export default function ProgressScreen() {
   const changeColor =
     weeklyWeightChange == null
       ? colors.mutedForeground
-      : weeklyWeightChange < 0
-        ? "#4ADE80"
-        : weeklyWeightChange > 0
-          ? "#FF6B6B"
-          : colors.mutedForeground;
+      : weightGoalDirection != null
+        ? (weightGoalDirection === "loss" && weeklyWeightChange < 0) ||
+          (weightGoalDirection === "gain" && weeklyWeightChange > 0)
+          ? "#4ADE80"
+          : weeklyWeightChange === 0
+            ? colors.mutedForeground
+            : "#FF6B6B"
+        : weeklyWeightChange < 0
+          ? "#4ADE80"
+          : weeklyWeightChange > 0
+            ? "#FF6B6B"
+            : colors.mutedForeground;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -683,6 +701,83 @@ export default function ProgressScreen() {
                   </Text>
                 </View>
               )}
+
+              {profile.targetWeight != null ? (
+                <View style={{ marginTop: 8 }}>
+                  <View style={styles.goalBarTrack}>
+                    <View
+                      style={[
+                        styles.goalBarFill,
+                        {
+                          width: `${Math.max(weightGoalProgress ?? 0, 2)}%`,
+                          backgroundColor:
+                            weeklyWeightChange != null &&
+                            ((weightGoalDirection === "loss" &&
+                              weeklyWeightChange < 0) ||
+                              (weightGoalDirection === "gain" &&
+                                weeklyWeightChange > 0))
+                              ? "#16a34a"
+                              : weeklyWeightChange != null &&
+                                  weeklyWeightChange !== 0
+                                ? "#dc2626"
+                                : colors.mutedForeground,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <View style={styles.goalRow}>
+                    <Text
+                      style={[
+                        styles.goalDistance,
+                        {
+                          color:
+                            weightDeltaToGoal != null &&
+                            Math.abs(weightDeltaToGoal) < 1
+                              ? "#16a34a"
+                              : colors.mutedForeground,
+                        },
+                      ]}
+                    >
+                      {weightDeltaToGoal != null
+                        ? `${Math.abs(convertWeight(weightDeltaToGoal, "kg", unit))} ${unit} to goal`
+                        : ""}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.goalTarget,
+                        { color: colors.mutedForeground },
+                      ]}
+                    >
+                      Target:{" "}
+                      {formatWeight(
+                        convertWeight(profile.targetWeight, "kg", unit),
+                        unit,
+                      )}{" "}
+                      {unit}
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.setGoalBtn, { borderColor: colors.border }]}
+                  onPress={() => {
+                    void Haptics.impactAsync(
+                      Haptics.ImpactFeedbackStyle.Light,
+                    );
+                    setTargetInput("");
+                    setGoalTypeInput(profile.weightGoalType);
+                    setShowTargetModal(true);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Feather name="target" size={13} color={colors.primary} />
+                  <Text
+                    style={[styles.setGoalText, { color: colors.primary }]}
+                  >
+                    Set a target weight
+                  </Text>
+                </TouchableOpacity>
+              )}
             </>
           ) : (
             <View style={styles.cwEmpty}>
@@ -942,6 +1037,235 @@ export default function ProgressScreen() {
         onClose={() => setShowAddWeight(false)}
         onSave={(w, selectedDate) => void addWeightEntry(w, selectedDate)}
       />
+
+      <Modal
+        visible={showTargetModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTargetModal(false)}
+      >
+        <Pressable
+          style={styles.detailOverlay}
+          onPress={() => setShowTargetModal(false)}
+        >
+          <Pressable
+            style={[
+              styles.targetSheet,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View
+              style={[
+                styles.detailHandle,
+                { backgroundColor: colors.mutedForeground },
+              ]}
+            />
+            <Text
+              style={[styles.detailTitle, { color: colors.foreground }]}
+            >
+              Target Weight
+            </Text>
+
+            <View style={styles.goalTypeRow}>
+              <TouchableOpacity
+                style={[
+                  styles.goalTypeBtn,
+                  {
+                    backgroundColor:
+                      goalTypeInput === "loss" ? "#16a34a20" : colors.muted,
+                    borderColor:
+                      goalTypeInput === "loss" ? "#16a34a" : colors.border,
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  void Haptics.impactAsync(
+                    Haptics.ImpactFeedbackStyle.Light,
+                  );
+                  setGoalTypeInput("loss");
+                }}
+              >
+                <Feather
+                  name="trending-down"
+                  size={14}
+                  color={goalTypeInput === "loss" ? "#4ade80" : colors.mutedForeground}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: "Inter_600SemiBold",
+                    color:
+                      goalTypeInput === "loss" ? "#4ade80" : colors.mutedForeground,
+                  }}
+                >
+                  Weight Loss
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.goalTypeBtn,
+                  {
+                    backgroundColor:
+                      goalTypeInput === "gain" ? "#16a34a20" : colors.muted,
+                    borderColor:
+                      goalTypeInput === "gain" ? "#16a34a" : colors.border,
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  void Haptics.impactAsync(
+                    Haptics.ImpactFeedbackStyle.Light,
+                  );
+                  setGoalTypeInput("gain");
+                }}
+              >
+                <Feather
+                  name="trending-up"
+                  size={14}
+                  color={goalTypeInput === "gain" ? "#4ade80" : colors.mutedForeground}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: "Inter_600SemiBold",
+                    color:
+                      goalTypeInput === "gain" ? "#4ade80" : colors.mutedForeground,
+                  }}
+                >
+                  Weight Gain
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.targetDisplay}>
+              <Text
+                style={[
+                  styles.targetValue,
+                  { color: targetInput ? colors.foreground : colors.mutedForeground },
+                ]}
+              >
+                {targetInput || "—"}
+              </Text>
+              <Text
+                style={[styles.targetUnit, { color: colors.mutedForeground }]}
+              >
+                {unit}
+              </Text>
+            </View>
+
+            <View style={styles.targetKeypad}>
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "←"].map(
+                (key) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.targetKey,
+                      { backgroundColor: colors.muted, borderColor: colors.border },
+                    ]}
+                    activeOpacity={0.6}
+                    onPress={() => {
+                      void Haptics.impactAsync(
+                        Haptics.ImpactFeedbackStyle.Light,
+                      );
+                      if (key === "←") {
+                        setTargetInput((p) => p.slice(0, -1));
+                      } else if (key === "." && targetInput.includes(".")) {
+                        return;
+                      } else {
+                        setTargetInput((p) => {
+                          if (p.includes(".") && key === ".") return p;
+                          const next = p + key;
+                          if (next.includes(".")) {
+                            const dec = next.split(".")[1];
+                            if (dec && dec.length > 1) return p;
+                          }
+                          return next;
+                        });
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.targetKeyText,
+                        { color: colors.foreground },
+                      ]}
+                    >
+                      {key}
+                    </Text>
+                  </TouchableOpacity>
+                ),
+              )}
+            </View>
+
+            <View style={styles.targetActions}>
+              {profile.targetWeight != null && (
+                <TouchableOpacity
+                  style={[styles.targetClearBtn, { borderColor: colors.border }]}
+                  onPress={() => {
+                    void Haptics.impactAsync(
+                      Haptics.ImpactFeedbackStyle.Medium,
+                    );
+                    void updateProfile({
+                      targetWeight: null,
+                      weightGoalType: null,
+                    });
+                    setShowTargetModal(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[styles.targetClearText, { color: colors.foreground }]}
+                  >
+                    Clear Goal
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[
+                  styles.targetSaveBtn,
+                  {
+                    backgroundColor:
+                      targetInput && goalTypeInput
+                        ? colors.primary
+                        : colors.muted,
+                    opacity: targetInput && goalTypeInput ? 1 : 0.5,
+                  },
+                ]}
+                disabled={!targetInput || !goalTypeInput}
+                onPress={() => {
+                  const parsed = parseFloat(targetInput);
+                  if (isNaN(parsed) || parsed <= 0 || !goalTypeInput) return;
+                  void Haptics.impactAsync(
+                    Haptics.ImpactFeedbackStyle.Medium,
+                  );
+                  const kgVal = unit === "lbs" ? lbsToKg(parsed) : parsed;
+                  void updateProfile({
+                    targetWeight: Math.round(kgVal * 10) / 10,
+                    weightGoalType: goalTypeInput,
+                  });
+                  setShowTargetModal(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.targetSaveText,
+                    {
+                      color:
+                        targetInput && goalTypeInput
+                          ? colors.primaryForeground
+                          : colors.foreground,
+                    },
+                  ]}
+                >
+                  Save Target
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1237,5 +1561,128 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 8,
+  },
+
+  goalBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(128,128,128,0.15)",
+    overflow: "hidden",
+  },
+  goalBarFill: {
+    height: "100%",
+    borderRadius: 3,
+  },
+  goalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+  },
+  goalDistance: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  goalTarget: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
+  setGoalBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 5,
+  },
+  setGoalText: {
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+  targetSheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderWidth: 1,
+    paddingBottom: 16,
+  },
+  goalTypeRow: {
+    flexDirection: "row",
+    paddingHorizontal: 24,
+    gap: 10,
+    marginBottom: 4,
+  },
+  goalTypeBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+  targetDisplay: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 6,
+  },
+  targetValue: {
+    fontSize: 42,
+    fontFamily: "Inter_700Bold",
+  },
+  targetUnit: {
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    textTransform: "uppercase",
+  },
+  targetKeypad: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingHorizontal: 24,
+    gap: 8,
+    marginBottom: 14,
+  },
+  targetKey: {
+    width: "30%",
+    aspectRatio: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  targetKeyText: {
+    fontSize: 20,
+    fontFamily: "Inter_600SemiBold",
+  },
+  targetActions: {
+    flexDirection: "row",
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  targetClearBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  targetClearText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  targetSaveBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  targetSaveText: {
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
   },
 });

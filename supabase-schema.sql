@@ -15,6 +15,8 @@ create table if not exists user_profiles (
   onboarding_complete boolean not null default false,
   selected_routine_type text,
   weight_unit text not null default 'kg',
+  target_weight numeric,
+  weight_goal_type text,
   inserted_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null
 );
