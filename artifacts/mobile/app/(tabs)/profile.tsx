@@ -18,6 +18,11 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
+import {
+  convertWeight,
+  formatWeight,
+  lbsToKg,
+} from "@/lib/weightUnits";
 
 function SettingsRow({
   icon,
@@ -86,6 +91,11 @@ export default function ProfileScreen() {
   const { profile, updateProfile, workoutLogs, streak, weightLogs } =
     useWorkout();
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [showTargetModal, setShowTargetModal] = useState(false);
+  const [targetInput, setTargetInput] = useState("");
+  const [goalTypeInput, setGoalTypeInput] = useState<"loss" | "gain" | null>(
+    null,
+  );
   const appVersion =
     (require("../../package.json") as { version?: string }).version ?? "0.0.0";
 
@@ -365,6 +375,22 @@ export default function ProfileScreen() {
             </View>
           }
         />
+        <SettingsRow
+          icon="target"
+          label="Target Weight"
+          sublabel={
+            profile.targetWeight != null
+              ? `${formatWeight(convertWeight(profile.targetWeight, "kg", profile.weightUnit), profile.weightUnit)} ${profile.weightUnit}`
+              : "Not set"
+          }
+          showChevron
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setTargetInput("");
+            setGoalTypeInput(profile.weightGoalType);
+            setShowTargetModal(true);
+          }}
+        />
       </View>
 
       <SectionHeader title="DATA" />
@@ -463,6 +489,211 @@ export default function ProfileScreen() {
                   ]}
                 >
                   Sign Out
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showTargetModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTargetModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+              Target Weight
+            </Text>
+
+            <View style={styles.goalTypeRow}>
+              <TouchableOpacity
+                style={[
+                  styles.goalTypeBtn,
+                  {
+                    backgroundColor:
+                      goalTypeInput === "loss" ? "#16a34a20" : colors.muted,
+                    borderColor:
+                      goalTypeInput === "loss" ? "#16a34a" : colors.border,
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setGoalTypeInput("loss");
+                }}
+              >
+                <Feather
+                  name="trending-down"
+                  size={14}
+                  color={goalTypeInput === "loss" ? "#4ade80" : colors.mutedForeground}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: "Inter_600SemiBold",
+                    color:
+                      goalTypeInput === "loss" ? "#4ade80" : colors.mutedForeground,
+                  }}
+                >
+                  Weight Loss
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.goalTypeBtn,
+                  {
+                    backgroundColor:
+                      goalTypeInput === "gain" ? "#16a34a20" : colors.muted,
+                    borderColor:
+                      goalTypeInput === "gain" ? "#16a34a" : colors.border,
+                  },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setGoalTypeInput("gain");
+                }}
+              >
+                <Feather
+                  name="trending-up"
+                  size={14}
+                  color={goalTypeInput === "gain" ? "#4ade80" : colors.mutedForeground}
+                />
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: "Inter_600SemiBold",
+                    color:
+                      goalTypeInput === "gain" ? "#4ade80" : colors.mutedForeground,
+                  }}
+                >
+                  Weight Gain
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.targetInput}>
+              <Text
+                style={[
+                  styles.targetValue,
+                  { color: targetInput ? colors.foreground : colors.mutedForeground },
+                ]}
+              >
+                {targetInput || "—"}
+              </Text>
+              <Text style={[styles.targetUnit, { color: colors.mutedForeground }]}>
+                {profile.weightUnit}
+              </Text>
+            </View>
+            <View style={styles.targetKeypad}>
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "←"].map(
+                (key) => (
+                  <TouchableOpacity
+                    key={key}
+                    style={[
+                      styles.targetKey,
+                      { backgroundColor: colors.muted, borderColor: colors.border },
+                    ]}
+                    activeOpacity={0.6}
+                    onPress={() => {
+                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      if (key === "←") {
+                        setTargetInput((p) => p.slice(0, -1));
+                      } else if (key === "." && targetInput.includes(".")) {
+                        return;
+                      } else {
+                        setTargetInput((p) => {
+                          if (p.includes(".") && key === ".") return p;
+                          const next = p + key;
+                          if (next.includes(".")) {
+                            const dec = next.split(".")[1];
+                            if (dec && dec.length > 1) return p;
+                          }
+                          return next;
+                        });
+                      }
+                    }}
+                  >
+                    <Text
+                      style={[styles.targetKeyText, { color: colors.foreground }]}
+                    >
+                      {key}
+                    </Text>
+                  </TouchableOpacity>
+                ),
+              )}
+            </View>
+            <View style={styles.modalActions}>
+              {profile.targetWeight != null && (
+                <TouchableOpacity
+                  style={[
+                    styles.modalButton,
+                    styles.modalButtonSecondary,
+                    { borderColor: colors.border },
+                  ]}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    void updateProfile({
+                      targetWeight: null,
+                      weightGoalType: null,
+                    });
+                    setShowTargetModal(false);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text
+                    style={[styles.modalButtonText, { color: colors.foreground }]}
+                  >
+                    Clear Goal
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={[
+                  styles.modalButton,
+                  styles.modalButtonPrimary,
+                  {
+                    backgroundColor:
+                      targetInput && goalTypeInput
+                        ? colors.primary
+                        : colors.muted,
+                    opacity: targetInput && goalTypeInput ? 1 : 0.5,
+                  },
+                ]}
+                disabled={!targetInput || !goalTypeInput}
+                onPress={() => {
+                  const parsed = parseFloat(targetInput);
+                  if (isNaN(parsed) || parsed <= 0 || !goalTypeInput) return;
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  const kgVal =
+                    profile.weightUnit === "lbs" ? lbsToKg(parsed) : parsed;
+                  void updateProfile({
+                    targetWeight: Math.round(kgVal * 10) / 10,
+                    weightGoalType: goalTypeInput,
+                  });
+                  setShowTargetModal(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.modalButtonText,
+                    {
+                      color: targetInput
+                        ? colors.primaryForeground
+                        : colors.foreground,
+                    },
+                  ]}
+                >
+                  Save Target
                 </Text>
               </TouchableOpacity>
             </View>
@@ -610,4 +841,54 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   segmentText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+
+  targetInput: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 6,
+  },
+  goalTypeRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 4,
+  },
+  goalTypeBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 6,
+  },
+  targetValue: {
+    fontSize: 42,
+    fontFamily: "Inter_700Bold",
+  },
+  targetUnit: {
+    fontSize: 16,
+    fontFamily: "Inter_400Regular",
+    textTransform: "uppercase",
+  },
+  targetKeypad: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 14,
+  },
+  targetKey: {
+    width: "30%",
+    aspectRatio: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  targetKeyText: {
+    fontSize: 20,
+    fontFamily: "Inter_600SemiBold",
+  },
 });

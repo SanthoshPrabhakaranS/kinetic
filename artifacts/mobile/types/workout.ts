@@ -73,6 +73,8 @@ export interface UserProfile {
   onboardingComplete: boolean;
   selectedRoutineType: RoutineType | null;
   weightUnit: "kg" | "lbs";
+  targetWeight: number | null;
+  weightGoalType: "loss" | "gain" | null;
 }
 
 export interface WeightEntry {

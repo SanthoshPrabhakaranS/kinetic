@@ -1,7 +1,7 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Platform,
   ScrollView,
@@ -32,60 +32,54 @@ function monthLabelFor(date: Date) {
   return new Intl.DateTimeFormat("en-US", { month: "short" }).format(date);
 }
 
-interface WeekColumn {
-  cells: (string | null)[];
-  monthLabel: string | null;
-}
+function buildMonthCalendar(monthDate: Date) {
+  const firstOfMonth = new Date(
+    monthDate.getFullYear(),
+    monthDate.getMonth(),
+    1,
+  );
+  const firstWeekOffset = (firstOfMonth.getDay() + 7) % 7;
+  const gridStart = addDays(firstOfMonth, -firstWeekOffset);
 
-function buildWeeks(todayKey: string): WeekColumn[] {
-  const today = keyToDate(todayKey);
-  const firstOfMonth = new Date(today.getFullYear(), today.getMonth() - 5, 1);
-  const start = addDays(firstOfMonth, -firstOfMonth.getDay());
-
-  const columns: WeekColumn[] = [];
-  let cursor = start;
-  let previousMonth: number | null = null;
-
-  while (cursor <= today) {
-    const cells: (string | null)[] = [];
-    for (let d = 0; d < 7; d++) {
-      const day = addDays(cursor, d);
-      if (day >= firstOfMonth && day <= today) {
-        cells.push(toDateKey(day));
-      } else {
-        cells.push(null);
-      }
-    }
-
-    const firstValid = cells.find((c) => c != null);
-    const columnMonth = firstValid
-      ? keyToDate(firstValid).getMonth()
-      : null;
-    let label: string | null = null;
-    if (columnMonth !== previousMonth) {
-      label = firstValid ? monthLabelFor(keyToDate(firstValid)) : null;
-      previousMonth = columnMonth;
-    }
-
-    columns.push({ cells, monthLabel: label });
-    cursor = addDays(cursor, 7);
-  }
-
-  return columns;
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = addDays(gridStart, index);
+    const key = toDateKey(date);
+    return {
+      key,
+      date,
+      inMonth: date.getMonth() === monthDate.getMonth(),
+    };
+  });
 }
 
 export default function StreakScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
   const { workoutLogs, streakInfo } = useWorkout();
+  const [viewMonth, setViewMonth] = useState(() => new Date());
 
-  const activeDates = useMemo(
-    () => getActiveDates(workoutLogs),
-    [workoutLogs],
-  );
+  const activeDates = useMemo(() => getActiveDates(workoutLogs), [workoutLogs]);
 
   const todayKey = toDateKey(new Date());
-  const weeks = useMemo(() => buildWeeks(todayKey), [todayKey]);
+  const monthCalendar = useMemo(
+    () => buildMonthCalendar(viewMonth),
+    [viewMonth],
+  );
+  const monthRows = useMemo(
+    () =>
+      Array.from({ length: 6 }, (_, rowIndex) =>
+        monthCalendar.slice(rowIndex * 7, rowIndex * 7 + 7),
+      ),
+    [monthCalendar],
+  );
+  const monthTitle = useMemo(
+    () =>
+      new Intl.DateTimeFormat("en-US", {
+        month: "long",
+        year: "numeric",
+      }).format(viewMonth),
+    [viewMonth],
+  );
 
   const thisMonthCount = useMemo(() => {
     const prefix = todayKey.slice(0, 7);
@@ -123,10 +117,7 @@ export default function StreakScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: botPad + 24 },
-        ]}
+        contentContainerStyle={[styles.content, { paddingBottom: botPad + 24 }]}
         showsVerticalScrollIndicator={false}
       >
         <View
@@ -141,7 +132,7 @@ export default function StreakScreen() {
               { backgroundColor: `${colors.primary}15` },
             ]}
           >
-            <Feather name="zap" size={28} color={colors.primary} />
+            <Ionicons name="flame" size={28} color={colors.primary} />
           </View>
           <View style={styles.heroText}>
             <View style={styles.heroValueRow}>
@@ -212,95 +203,104 @@ export default function StreakScreen() {
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
         >
-          <Text style={[styles.cardTitle, { color: colors.foreground }]}>
-            ACTIVITY
-          </Text>
-          <Text
-            style={[styles.cardSub, { color: colors.mutedForeground }]}
-          >
-            Last 6 months
-          </Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.calendarScroll}
-          >
-            <View style={styles.calendarInner}>
-              <View style={styles.monthRow}>
-                <View style={{ width: GUTTER }} />
-                {weeks.map((week, index) => (
-                  <View
-                    key={index}
-                    style={{ width: columnWidth, alignItems: "flex-start" }}
-                  >
-                    {week.monthLabel && (
-                      <Text
-                        style={[
-                          styles.monthLabel,
-                          { color: colors.mutedForeground },
-                        ]}
-                      >
-                        {week.monthLabel}
-                      </Text>
-                    )}
-                  </View>
-                ))}
-              </View>
-              <View style={styles.calendarBody}>
-                <View style={styles.dayLabels}>
-                  {DAY_KEYS.map((day) => (
-                    <Text
-                      key={day}
+          <View style={styles.activityHeader}>
+            <TouchableOpacity
+              onPress={() =>
+                setViewMonth(
+                  (prev) =>
+                    new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
+                )
+              }
+              hitSlop={10}
+            >
+              <Feather
+                name="chevron-left"
+                size={18}
+                color={colors.foreground}
+              />
+            </TouchableOpacity>
+
+            <Text
+              style={[styles.monthHeaderText, { color: colors.foreground }]}
+            >
+              {monthTitle.toUpperCase()}
+            </Text>
+
+            <TouchableOpacity
+              onPress={() =>
+                setViewMonth(
+                  (prev) =>
+                    new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
+                )
+              }
+              hitSlop={10}
+            >
+              <Feather
+                name="chevron-right"
+                size={18}
+                color={colors.foreground}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.weekdayRow}>
+            {DAY_KEYS.map((day) => (
+              <Text
+                key={day}
+                style={[styles.weekdayText, { color: colors.mutedForeground }]}
+              >
+                {day}
+              </Text>
+            ))}
+          </View>
+
+          <View style={styles.monthGrid}>
+            {monthRows.map((row, rowIndex) => (
+              <View key={`row-${rowIndex}`} style={styles.dateRow}>
+                {row.map(({ key, date, inMonth }) => {
+                  const isToday = key === todayKey;
+                  const isActive = activeDates.has(key);
+                  const showFilled = inMonth && isActive;
+
+                  return (
+                    <View
+                      key={key}
                       style={[
-                        styles.dayLabel,
-                        { color: colors.mutedForeground },
+                        styles.dateCell,
+                        {
+                          backgroundColor: showFilled
+                            ? colors.primary
+                            : isToday && inMonth
+                              ? `${colors.primary}18`
+                              : inMonth
+                                ? colors.muted
+                                : "transparent",
+                          borderWidth: isToday && inMonth ? 1 : 0,
+                          borderColor:
+                            isToday && inMonth ? colors.primary : "transparent",
+                        },
                       ]}
                     >
-                      {day}
-                    </Text>
-                  ))}
-                </View>
-                {[...Array(7)].map((_, dayIndex) => (
-                  <View key={dayIndex} style={styles.calendarRow}>
-                    {weeks.map((week, weekIndex) => {
-                      const cellKey = week.cells[dayIndex];
-                      const isActive =
-                        cellKey != null && activeDates.has(cellKey);
-                      const isToday = cellKey === todayKey;
-                      return (
-                        <View
-                          key={weekIndex}
-                          style={[
-                            styles.cell,
-                            {
-                              backgroundColor: isActive
-                                ? colors.primary
-                                : cellKey != null
-                                  ? colors.muted
-                                  : "transparent",
-                              borderWidth: isToday ? 1 : 0,
-                              borderColor: colors.foreground,
-                            },
-                          ]}
-                        />
-                      );
-                    })}
-                  </View>
-                ))}
+                      <Text
+                        style={[
+                          styles.dateText,
+                          {
+                            color:
+                              showFilled || (isToday && inMonth)
+                                ? colors.primaryForeground
+                                : inMonth
+                                  ? colors.foreground
+                                  : colors.mutedForeground,
+                          },
+                        ]}
+                      >
+                        {date.getDate()}
+                      </Text>
+                    </View>
+                  );
+                })}
               </View>
-            </View>
-          </ScrollView>
-          <View style={styles.legendRow}>
-            <Text style={[styles.legendText, { color: colors.mutedForeground }]}>
-              Less
-            </Text>
-            <View style={[styles.legendCell, { backgroundColor: colors.muted }]} />
-            <View
-              style={[styles.legendCell, { backgroundColor: colors.primary }]}
-            />
-            <Text style={[styles.legendText, { color: colors.mutedForeground }]}>
-              More
-            </Text>
+            ))}
           </View>
         </View>
 
@@ -362,7 +362,9 @@ export default function StreakScreen() {
           activeOpacity={0.85}
         >
           <Feather name="zap" size={18} color={colors.primaryForeground} />
-          <Text style={[styles.logBtnText, { color: colors.primaryForeground }]}>
+          <Text
+            style={[styles.logBtnText, { color: colors.primaryForeground }]}
+          >
             LOG A WORKOUT
           </Text>
         </TouchableOpacity>
@@ -423,42 +425,58 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     padding: 14,
-    gap: 8,
+    gap: 10,
+  },
+  activityHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  monthHeaderText: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 12,
+    fontFamily: "Inter_700Bold",
+    letterSpacing: 1.2,
+  },
+  weekdayRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 6,
+  },
+  weekdayText: {
+    width: 28,
+    textAlign: "center",
+    fontSize: 9,
+    fontFamily: "Inter_500Medium",
+    textTransform: "uppercase",
+  },
+  monthGrid: {
+    gap: 6,
+  },
+  dateRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 6,
+    marginBottom: 6,
+  },
+  dateCell: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  dateText: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
   },
   cardTitle: {
     fontSize: 12,
     fontFamily: "Inter_700Bold",
     letterSpacing: 1,
   },
-  cardSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: -4 },
-  calendarScroll: { paddingTop: 8 },
-  calendarInner: { gap: 4 },
-  monthRow: {
-    flexDirection: "row",
-    height: 16,
-  },
-  monthLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  calendarBody: { flexDirection: "row", gap: 6 },
-  dayLabels: {
-    width: GUTTER,
-    gap: CELL_GAP,
-  },
-  dayLabel: { fontSize: 9, fontFamily: "Inter_400Regular", height: CELL_SIZE, lineHeight: CELL_SIZE },
-  calendarRow: { flexDirection: "row", gap: CELL_GAP },
-  cell: {
-    width: CELL_SIZE,
-    height: CELL_SIZE,
-    borderRadius: 3,
-    marginBottom: CELL_GAP,
-  },
-  legendRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 2,
-  },
-  legendText: { fontSize: 11, fontFamily: "Inter_400Regular" },
-  legendCell: { width: 10, height: 10, borderRadius: 2 },
   milestoneCard: {
     borderRadius: 14,
     borderWidth: 1,
