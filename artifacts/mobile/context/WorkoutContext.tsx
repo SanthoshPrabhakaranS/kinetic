@@ -39,6 +39,7 @@ const DEFAULT_PROFILE: UserProfile = {
   name: "",
   onboardingComplete: false,
   selectedRoutineType: null,
+  activeRoutineId: null,
   weightUnit: "kg",
   targetWeight: null,
   weightGoalType: null,
@@ -52,6 +53,7 @@ const WORKOUT_SETS_TABLE = "workout_sets";
 const ROUTINES_TABLE = "routines";
 const ROUTINE_EXERCISES_TABLE = "routine_exercises";
 const WEIGHT_ENTRIES_TABLE = "weight_entries";
+const DEFAULT_ROUTINE_WEEKDAYS = [1, 2, 3, 4, 5];
 
 interface WorkoutSyncPayload {
   profile: UserProfile;
@@ -148,33 +150,28 @@ const seedDefaultExercisesForUser = (userId: string): Exercise[] =>
   }));
 
 const DEFAULT_EXERCISES_BY_NAME = new Map<string, Exercise>(
-  DEFAULT_EXERCISES.map((exercise) => [
-    exercise.name.toLowerCase(),
-    exercise,
-  ]),
+  DEFAULT_EXERCISES.map((exercise) => [exercise.name.toLowerCase(), exercise]),
 );
 
 const mapExercise = (row: any): Exercise => {
-  const canonical =
-    !row.is_custom
-      ? DEFAULT_EXERCISES_BY_NAME.get(
-          String(row.name ?? "").trim().toLowerCase(),
-        )
-      : undefined;
+  const canonical = !row.is_custom
+    ? DEFAULT_EXERCISES_BY_NAME.get(
+        String(row.name ?? "")
+          .trim()
+          .toLowerCase(),
+      )
+    : undefined;
   return {
     id: row.id,
     name: row.name || "Exercise",
     muscleGroup:
-      canonical?.muscleGroup ??
-      row.muscle_group ??
-      row.muscleGroup ??
-      "CORE",
+      canonical?.muscleGroup ?? row.muscle_group ?? row.muscleGroup ?? "CORE",
     equipment: canonical?.equipment ?? row.equipment ?? "Bodyweight",
     measurementUnit:
       canonical?.measurementUnit ??
       (row.measurement_unit === "Duration"
         ? "Duration"
-        : row.measurement_unit ?? row.measurementUnit ?? "Weight & Reps"),
+        : (row.measurement_unit ?? row.measurementUnit ?? "Weight & Reps")),
     instructions: canonical?.instructions ?? row.instructions ?? undefined,
     isCustom: row.is_custom ?? false,
   };
@@ -190,7 +187,9 @@ const mapWorkoutSet = (row: any): SetEntry => ({
 
 const mapWorkoutEntry = (row: any): WorkoutEntry => {
   const canonical = DEFAULT_EXERCISES_BY_NAME.get(
-    String(row.exercise_name ?? "").trim().toLowerCase(),
+    String(row.exercise_name ?? "")
+      .trim()
+      .toLowerCase(),
   );
   return {
     id: row.id,
@@ -210,18 +209,23 @@ const mapRoutine = (row: any): Routine => ({
   id: row.id,
   name: row.name,
   type: row.type,
+  weekdays: Array.isArray(row.weekdays)
+    ? row.weekdays
+        .map(Number)
+        .filter((day: number) => Number.isInteger(day) && day >= 0 && day <= 6)
+    : DEFAULT_ROUTINE_WEEKDAYS,
   exercises: Array.isArray(row.routine_exercises)
     ? row.routine_exercises.map((exerciseRow: any) => {
         const canonical = DEFAULT_EXERCISES_BY_NAME.get(
-          String(exerciseRow.exercise_name ?? "").trim().toLowerCase(),
+          String(exerciseRow.exercise_name ?? "")
+            .trim()
+            .toLowerCase(),
         );
         return {
           exerciseId: exerciseRow.exercise_id,
           exerciseName: exerciseRow.exercise_name || "Exercise",
           muscleGroup:
-            canonical?.muscleGroup ??
-            exerciseRow.muscle_group ??
-            "CORE",
+            canonical?.muscleGroup ?? exerciseRow.muscle_group ?? "CORE",
           targetSets: Number(exerciseRow.target_sets) || 3,
         };
       })
@@ -271,7 +275,15 @@ interface WorkoutContextValue {
   getLastEntryForExercise: (exerciseId: string) => WorkoutEntry | null;
   getSessionsForExercise: (exerciseId: string) => WorkoutEntry[];
   getBestSetForExercise: (exerciseId: string) => SetEntry | null;
+  addExerciseToRoutine: (
+    routineId: string,
+    exerciseId: string,
+  ) => Promise<void>;
   addRoutine: (routine: Omit<Routine, "id">) => Promise<void>;
+  updateRoutine: (
+    routineId: string,
+    updates: Partial<Omit<Routine, "id">>,
+  ) => Promise<void>;
   addWeightEntry: (weight: number, selectedDate?: string) => Promise<void>;
   deleteWeightEntry: (id: string) => Promise<void>;
 }
@@ -323,6 +335,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             name: payload.profile.name,
             onboarding_complete: payload.profile.onboardingComplete,
             selected_routine_type: payload.profile.selectedRoutineType,
+            active_routine_id: payload.profile.activeRoutineId,
             weight_unit: payload.profile.weightUnit,
             target_weight: payload.profile.targetWeight,
             weight_goal_type: payload.profile.weightGoalType,
@@ -461,6 +474,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         user_id: persistedUserId,
         name: routine.name,
         type: routine.type,
+        weekdays: routine.weekdays,
       }));
       const routineExerciseRows = payload.routines.flatMap((routine) =>
         routine.exercises
@@ -473,7 +487,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
             exercise_name: exercise.exerciseName?.trim() || "Exercise",
             muscle_group: exercise.muscleGroup || "CORE",
             target_sets:
-              Number.isFinite(Number(exercise.targetSets)) && Number(exercise.targetSets) > 0
+              Number.isFinite(Number(exercise.targetSets)) &&
+              Number(exercise.targetSets) > 0
                 ? exercise.targetSets
                 : 3,
           })),
@@ -660,6 +675,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
               name: profileData.name?.trim() || googleProfile.name,
               onboardingComplete: Boolean(profileData.onboarding_complete),
               selectedRoutineType: profileData.selected_routine_type ?? null,
+              activeRoutineId: profileData.active_routine_id ?? null,
               weightUnit: profileData.weight_unit === "lbs" ? "lbs" : "kg",
               targetWeight:
                 profileData.target_weight != null
@@ -714,6 +730,14 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
           id: row.id,
           name: row.name,
           type: row.type,
+          weekdays: Array.isArray(row.weekdays)
+            ? row.weekdays
+                .map(Number)
+                .filter(
+                  (day: number) =>
+                    Number.isInteger(day) && day >= 0 && day <= 6,
+                )
+            : DEFAULT_ROUTINE_WEEKDAYS,
           exercises: (routineExercisesByRoutineId.get(row.id) ?? []).map(
             (exerciseRow: any) => ({
               exerciseId: exerciseRow.exercise_id,
@@ -801,12 +825,34 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         isCustom: true,
       };
       const updatedExercises = [...exercises, newExercise];
+      const activeRoutine = profile.activeRoutineId
+        ? routines.find((routine) => routine.id === profile.activeRoutineId)
+        : undefined;
+      const updatedRoutines = activeRoutine
+        ? routines.map((routine) =>
+            routine.id === activeRoutine.id
+              ? {
+                  ...routine,
+                  exercises: [
+                    ...routine.exercises,
+                    {
+                      exerciseId: newExercise.id,
+                      exerciseName: newExercise.name,
+                      muscleGroup: newExercise.muscleGroup,
+                      targetSets: 3,
+                    },
+                  ],
+                }
+              : routine,
+          )
+        : routines;
       setExercises(updatedExercises);
+      if (activeRoutine) setRoutines(updatedRoutines);
       await sync({
         profile,
         exercises: updatedExercises,
         workoutLogs,
-        routines,
+        routines: updatedRoutines,
         weightLogs,
       });
     },
@@ -998,9 +1044,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         .flatMap((log) =>
           log.entries.filter((entry) => entry.exerciseId === exerciseId),
         )
-        .sort((a, b) =>
-          String(b.timestamp).localeCompare(String(a.timestamp)),
-        );
+        .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
     },
     [workoutLogs],
   );
@@ -1022,16 +1066,84 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     [workoutLogs],
   );
 
-  const addRoutine = useCallback(
-    async (routine: Omit<Routine, "id">) => {
-      const newRoutine: Routine = { ...routine, id: generateId() };
-      const updated = [...routines, newRoutine];
-      setRoutines(updated);
+  const addExerciseToRoutine = useCallback(
+    async (routineId: string, exerciseId: string) => {
+      const exercise = exercises.find((item) => item.id === exerciseId);
+      const routine = routines.find((item) => item.id === routineId);
+      if (
+        !exercise ||
+        !routine ||
+        routine.exercises.some((item) => item.exerciseId === exerciseId)
+      ) {
+        return;
+      }
+
+      const updatedRoutines = routines.map((item) =>
+        item.id === routineId
+          ? {
+              ...item,
+              exercises: [
+                ...item.exercises,
+                {
+                  exerciseId: exercise.id,
+                  exerciseName: exercise.name,
+                  muscleGroup: exercise.muscleGroup,
+                  targetSets: 3,
+                },
+              ],
+            }
+          : item,
+      );
+      setRoutines(updatedRoutines);
       await sync({
         profile,
         exercises,
         workoutLogs,
+        routines: updatedRoutines,
+        weightLogs,
+      });
+    },
+    [exercises, profile, routines, sync, weightLogs, workoutLogs],
+  );
+
+  const addRoutine = useCallback(
+    async (routine: Omit<Routine, "id">) => {
+      const newRoutine: Routine = {
+        ...routine,
+        id: generateId(),
+        weekdays:
+          routine.weekdays.length > 0
+            ? routine.weekdays
+            : DEFAULT_ROUTINE_WEEKDAYS,
+      };
+      const updated = [...routines, newRoutine];
+      const updatedProfile = profile.activeRoutineId
+        ? profile
+        : { ...profile, activeRoutineId: newRoutine.id };
+      setRoutines(updated);
+      if (updatedProfile !== profile) setProfile(updatedProfile);
+      await sync({
+        profile: updatedProfile,
+        exercises,
+        workoutLogs,
         routines: updated,
+        weightLogs,
+      });
+    },
+    [exercises, profile, routines, sync, weightLogs, workoutLogs],
+  );
+
+  const updateRoutine = useCallback(
+    async (routineId: string, updates: Partial<Omit<Routine, "id">>) => {
+      const updatedRoutines = routines.map((routine) =>
+        routine.id === routineId ? { ...routine, ...updates } : routine,
+      );
+      setRoutines(updatedRoutines);
+      await sync({
+        profile,
+        exercises,
+        workoutLogs,
+        routines: updatedRoutines,
         weightLogs,
       });
     },
@@ -1080,9 +1192,19 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     return workoutLogs.find((l) => l.date === today) ?? null;
   }, [workoutLogs]);
 
+  const activeRoutine = useMemo(
+    () => routines.find((routine) => routine.id === profile.activeRoutineId),
+    [profile.activeRoutineId, routines],
+  );
+
   const streakInfo = useMemo(
-    () => calcStreak(getActiveDates(workoutLogs)),
-    [workoutLogs],
+    () =>
+      calcStreak(
+        getActiveDates(workoutLogs),
+        getTodayDate(),
+        activeRoutine?.weekdays,
+      ),
+    [activeRoutine?.weekdays, workoutLogs],
   );
 
   const streak = streakInfo.current;
@@ -1168,13 +1290,17 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       getLastEntryForExercise,
       getSessionsForExercise,
       getBestSetForExercise,
+      addExerciseToRoutine,
       addRoutine,
+      updateRoutine,
       addWeightEntry,
       deleteWeightEntry,
     }),
     [
       addExercise,
+      addExerciseToRoutine,
       addRoutine,
+      updateRoutine,
       addWeightEntry,
       addWorkoutEntry,
       deleteWeightEntry,

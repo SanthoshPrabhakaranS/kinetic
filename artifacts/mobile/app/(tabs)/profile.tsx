@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { Redirect } from "expo-router";
+import { Redirect, router } from "expo-router";
 import React, { useState } from "react";
 import {
   Modal,
@@ -18,11 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useWorkout } from "@/context/WorkoutContext";
 import { useColors } from "@/hooks/useColors";
-import {
-  convertWeight,
-  formatWeight,
-  lbsToKg,
-} from "@/lib/weightUnits";
+import { convertWeight, formatWeight, lbsToKg } from "@/lib/weightUnits";
 
 function SettingsRow({
   icon,
@@ -114,7 +110,6 @@ export default function ProfileScreen() {
     (t, l) => t + l.entries.reduce((e, en) => e + en.sets.length, 0),
     0,
   );
-
   const handleToggleUnit = async () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await updateProfile({
@@ -393,6 +388,25 @@ export default function ProfileScreen() {
         />
       </View>
 
+      <SectionHeader title="ROUTINE" />
+      <View
+        style={[
+          styles.section,
+          { backgroundColor: colors.card, borderColor: colors.border },
+        ]}
+      >
+        <SettingsRow
+          icon="calendar"
+          label="Manage Routines"
+          sublabel="Choose, edit, or create a routine"
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            router.push("/manage-routines");
+          }}
+          showChevron
+        />
+      </View>
+
       <SectionHeader title="DATA" />
       <View
         style={[
@@ -533,14 +547,20 @@ export default function ProfileScreen() {
                 <Feather
                   name="trending-down"
                   size={14}
-                  color={goalTypeInput === "loss" ? "#4ade80" : colors.mutedForeground}
+                  color={
+                    goalTypeInput === "loss"
+                      ? "#4ade80"
+                      : colors.mutedForeground
+                  }
                 />
                 <Text
                   style={{
                     fontSize: 13,
                     fontFamily: "Inter_600SemiBold",
                     color:
-                      goalTypeInput === "loss" ? "#4ade80" : colors.mutedForeground,
+                      goalTypeInput === "loss"
+                        ? "#4ade80"
+                        : colors.mutedForeground,
                   }}
                 >
                   Weight Loss
@@ -565,14 +585,20 @@ export default function ProfileScreen() {
                 <Feather
                   name="trending-up"
                   size={14}
-                  color={goalTypeInput === "gain" ? "#4ade80" : colors.mutedForeground}
+                  color={
+                    goalTypeInput === "gain"
+                      ? "#4ade80"
+                      : colors.mutedForeground
+                  }
                 />
                 <Text
                   style={{
                     fontSize: 13,
                     fontFamily: "Inter_600SemiBold",
                     color:
-                      goalTypeInput === "gain" ? "#4ade80" : colors.mutedForeground,
+                      goalTypeInput === "gain"
+                        ? "#4ade80"
+                        : colors.mutedForeground,
                   }}
                 >
                   Weight Gain
@@ -584,12 +610,18 @@ export default function ProfileScreen() {
               <Text
                 style={[
                   styles.targetValue,
-                  { color: targetInput ? colors.foreground : colors.mutedForeground },
+                  {
+                    color: targetInput
+                      ? colors.foreground
+                      : colors.mutedForeground,
+                  },
                 ]}
               >
                 {targetInput || "—"}
               </Text>
-              <Text style={[styles.targetUnit, { color: colors.mutedForeground }]}>
+              <Text
+                style={[styles.targetUnit, { color: colors.mutedForeground }]}
+              >
                 {profile.weightUnit}
               </Text>
             </View>
@@ -600,11 +632,16 @@ export default function ProfileScreen() {
                     key={key}
                     style={[
                       styles.targetKey,
-                      { backgroundColor: colors.muted, borderColor: colors.border },
+                      {
+                        backgroundColor: colors.muted,
+                        borderColor: colors.border,
+                      },
                     ]}
                     activeOpacity={0.6}
                     onPress={() => {
-                      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      void Haptics.impactAsync(
+                        Haptics.ImpactFeedbackStyle.Light,
+                      );
                       if (key === "←") {
                         setTargetInput((p) => p.slice(0, -1));
                       } else if (key === "." && targetInput.includes(".")) {
@@ -623,7 +660,10 @@ export default function ProfileScreen() {
                     }}
                   >
                     <Text
-                      style={[styles.targetKeyText, { color: colors.foreground }]}
+                      style={[
+                        styles.targetKeyText,
+                        { color: colors.foreground },
+                      ]}
                     >
                       {key}
                     </Text>
@@ -640,7 +680,9 @@ export default function ProfileScreen() {
                     { borderColor: colors.border },
                   ]}
                   onPress={() => {
-                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    void Haptics.impactAsync(
+                      Haptics.ImpactFeedbackStyle.Medium,
+                    );
                     void updateProfile({
                       targetWeight: null,
                       weightGoalType: null,
@@ -650,7 +692,10 @@ export default function ProfileScreen() {
                   activeOpacity={0.8}
                 >
                   <Text
-                    style={[styles.modalButtonText, { color: colors.foreground }]}
+                    style={[
+                      styles.modalButtonText,
+                      { color: colors.foreground },
+                    ]}
                   >
                     Clear Goal
                   </Text>
@@ -767,6 +812,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 20,
     gap: 12,
+  },
+  routineOption: {
+    minHeight: 46,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  routineOptionText: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
   },
   modalTitle: {
     fontSize: 20,

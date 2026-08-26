@@ -19,18 +19,9 @@ import {
   DAY_KEYS,
   getActiveDates,
   getEarnedMilestones,
-  keyToDate,
   MILESTONES,
   toDateKey,
 } from "@/lib/streaks";
-
-const CELL_SIZE = 12;
-const CELL_GAP = 3;
-const GUTTER = 22;
-
-function monthLabelFor(date: Date) {
-  return new Intl.DateTimeFormat("en-US", { month: "short" }).format(date);
-}
 
 function buildMonthCalendar(monthDate: Date) {
   const firstOfMonth = new Date(
@@ -97,8 +88,6 @@ export default function StreakScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
-  const columnWidth = CELL_SIZE + CELL_GAP;
-
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
       <View

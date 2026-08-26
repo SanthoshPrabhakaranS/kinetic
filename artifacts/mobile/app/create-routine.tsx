@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import React, { useState } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -16,23 +16,37 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useWorkout } from "@/context/WorkoutContext";
+import { DayPicker } from "@/components/DayPicker";
 import { useColors } from "@/hooks/useColors";
 import type { Exercise, RoutineExercise } from "@/types/workout";
 
 export default function CreateRoutineScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { exercises, addRoutine } = useWorkout();
+  const { routineId } = useLocalSearchParams<{ routineId?: string }>();
+  const { exercises, routines, addRoutine, updateRoutine } = useWorkout();
+  const editingRoutine = routines.find((routine) => routine.id === routineId);
 
   const [routineName, setRoutineName] = useState("");
   const [selectedExercises, setSelectedExercises] = useState<RoutineExercise[]>(
     [],
   );
+  const [selectedDays, setSelectedDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [showPicker, setShowPicker] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const isValid = routineName.trim().length > 0 && selectedExercises.length > 0;
+  useEffect(() => {
+    if (!editingRoutine) return;
+    setRoutineName(editingRoutine.name);
+    setSelectedDays(editingRoutine.weekdays);
+    setSelectedExercises(editingRoutine.exercises);
+  }, [editingRoutine]);
+
+  const isValid =
+    routineName.trim().length > 0 &&
+    selectedExercises.length > 0 &&
+    selectedDays.length > 0;
 
   const addExerciseToRoutine = (ex: Exercise) => {
     const already = selectedExercises.some((r) => r.exerciseId === ex.id);
@@ -69,16 +83,22 @@ export default function CreateRoutineScreen() {
     );
   };
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
     if (!isValid || saving) return;
     setSaving(true);
     void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     try {
-      await addRoutine({
+      const routine = {
         name: routineName.trim(),
         type: "custom",
+        weekdays: selectedDays,
         exercises: selectedExercises,
-      });
+      } as const;
+      if (editingRoutine) {
+        await updateRoutine(editingRoutine.id, routine);
+      } else {
+        await addRoutine(routine);
+      }
       router.replace("/(tabs)");
     } finally {
       setSaving(false);
@@ -123,6 +143,16 @@ export default function CreateRoutineScreen() {
             />
             <Feather name="edit-2" size={16} color={colors.mutedForeground} />
           </View>
+        </View>
+
+        <View style={styles.field}>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>
+            TRAINING DAYS
+          </Text>
+          <DayPicker selectedDays={selectedDays} onChange={setSelectedDays} />
+          <Text style={[styles.helperText, { color: colors.mutedForeground }]}>
+            Choose at least one day
+          </Text>
         </View>
 
         <View style={styles.field}>
@@ -219,7 +249,7 @@ export default function CreateRoutineScreen() {
               backgroundColor: isValid ? colors.primary : `${colors.primary}40`,
             },
           ]}
-          onPress={handleCreate}
+          onPress={handleSave}
           activeOpacity={0.85}
           disabled={!isValid || saving}
         >
@@ -231,7 +261,13 @@ export default function CreateRoutineScreen() {
           <Text
             style={[styles.createBtnText, { color: colors.primaryForeground }]}
           >
-            {saving ? "CREATING..." : "CREATE ROUTINE"}
+            {saving
+              ? editingRoutine
+                ? "SAVING..."
+                : "CREATING..."
+              : editingRoutine
+                ? "SAVE CHANGES"
+                : "CREATE ROUTINE"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -357,6 +393,10 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
+    fontFamily: "Inter_400Regular",
+  },
+  helperText: {
+    fontSize: 12,
     fontFamily: "Inter_400Regular",
   },
   exercisesHeader: {

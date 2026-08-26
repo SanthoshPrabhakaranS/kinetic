@@ -71,8 +71,35 @@ test("worked out yesterday but not today -> streak alive and at risk", () => {
   assert.equal(info.lastWorkout, "2026-07-14");
 });
 
+test("scheduled streak skips non-training days", () => {
+  const active = keysToSet([
+    "2026-07-14",
+    "2026-07-15",
+    "2026-07-16",
+    "2026-07-17",
+    "2026-07-18",
+  ]);
+  const info = calcStreak(active, "2026-07-19", [2, 3, 4, 5, 6]);
+  assert.equal(info.current, 5);
+  assert.equal(info.best, 5);
+  assert.equal(info.atRisk, false);
+});
+
+test("scheduled streak is at risk on a missed training day", () => {
+  const active = keysToSet(["2026-07-14", "2026-07-15"]);
+  const info = calcStreak(active, "2026-07-16", [2, 3, 4, 5, 6]);
+  assert.equal(info.current, 2);
+  assert.equal(info.best, 2);
+  assert.equal(info.atRisk, true);
+});
+
 test("gap breaks the current streak", () => {
-  const active = keysToSet(["2026-07-10", "2026-07-12", "2026-07-13", "2026-07-14"]);
+  const active = keysToSet([
+    "2026-07-10",
+    "2026-07-12",
+    "2026-07-13",
+    "2026-07-14",
+  ]);
   const info = calcStreak(active, "2026-07-15");
   assert.equal(info.current, 3);
   assert.equal(info.best, 3);
@@ -116,7 +143,13 @@ test("getEarnedMilestones only returns achieved milestones", () => {
 
 test("getStreakRuns groups consecutive days", () => {
   const runs = getStreakRuns(
-    keysToSet(["2026-07-10", "2026-07-11", "2026-07-12", "2026-07-15", "2026-07-16"]),
+    keysToSet([
+      "2026-07-10",
+      "2026-07-11",
+      "2026-07-12",
+      "2026-07-15",
+      "2026-07-16",
+    ]),
   );
   assert.deepEqual(runs, [
     ["2026-07-10", "2026-07-11", "2026-07-12"],

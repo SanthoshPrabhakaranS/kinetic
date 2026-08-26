@@ -14,6 +14,7 @@ create table if not exists user_profiles (
   name text not null,
   onboarding_complete boolean not null default false,
   selected_routine_type text,
+  active_routine_id text,
   weight_unit text not null default 'kg',
   target_weight numeric,
   weight_goal_type text,
@@ -25,6 +26,8 @@ drop trigger if exists set_user_profiles_updated_at on user_profiles;
 create trigger set_user_profiles_updated_at
 before update on user_profiles
 for each row execute function set_updated_at();
+
+alter table user_profiles add column if not exists active_routine_id text;
 
 create table if not exists exercises (
   id text primary key,
@@ -114,6 +117,7 @@ create table if not exists routines (
   user_id uuid not null references auth.users(id) on delete cascade,
   name text not null,
   type text not null,
+  weekdays integer[] not null default '{1,2,3,4,5}',
   inserted_at timestamp with time zone default now() not null,
   updated_at timestamp with time zone default now() not null
 );
@@ -122,6 +126,8 @@ drop trigger if exists set_routines_updated_at on routines;
 create trigger set_routines_updated_at
 before update on routines
 for each row execute function set_updated_at();
+
+alter table routines add column if not exists weekdays integer[] not null default '{1,2,3,4,5}';
 
 create table if not exists routine_exercises (
   id text primary key,

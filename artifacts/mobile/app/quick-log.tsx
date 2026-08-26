@@ -190,6 +190,9 @@ export default function QuickLogScreen() {
   }>();
   const {
     exercises,
+    addExerciseToRoutine,
+    profile,
+    routines,
     workoutLogs,
     addWorkoutEntry,
     updateWorkoutEntry,
@@ -204,6 +207,9 @@ export default function QuickLogScreen() {
     null,
   );
   const [showPicker, setShowPicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState<"routine" | "library">(
+    "routine",
+  );
   const [pickerQuery, setPickerQuery] = useState("");
 
   const [sets, setSets] = useState<SetRow[]>([makeSet()]);
@@ -759,12 +765,37 @@ export default function QuickLogScreen() {
     );
   };
 
-  const filteredExercises = exercises.filter(
-    (ex) =>
-      pickerQuery.trim() === "" ||
-      ex.name.toLowerCase().includes(pickerQuery.toLowerCase()) ||
-      ex.muscleGroup.toLowerCase().includes(pickerQuery.toLowerCase()),
+  const activeRoutine = routines.find(
+    (routine) => routine.id === profile.activeRoutineId,
   );
+  const routineExerciseIds = new Set(
+    activeRoutine?.exercises.map(
+      (routineExercise) => routineExercise.exerciseId,
+    ),
+  );
+  const filteredExercises = exercises.filter((ex) => {
+    const isHistoricalSelection =
+      editingEntry?.exerciseId === ex.id && !routineExerciseIds.has(ex.id);
+    const isAllowed =
+      !activeRoutine || routineExerciseIds.has(ex.id) || isHistoricalSelection;
+    const query = pickerQuery.trim().toLowerCase();
+    return (
+      isAllowed &&
+      (query === "" ||
+        ex.name.toLowerCase().includes(query) ||
+        ex.muscleGroup.toLowerCase().includes(query))
+    );
+  });
+
+  const filteredLibraryExercises = exercises.filter((ex) => {
+    const query = pickerQuery.trim().toLowerCase();
+    return (
+      query === "" ||
+      ex.name.toLowerCase().includes(query) ||
+      ex.muscleGroup.toLowerCase().includes(query)
+    );
+  });
+  const routineName = activeRoutine?.name;
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const botPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -839,7 +870,10 @@ export default function QuickLogScreen() {
             styles.exerciseRow,
             { backgroundColor: colors.card, borderColor: colors.border },
           ]}
-          onPress={() => setShowPicker(true)}
+          onPress={() => {
+            setPickerMode("routine");
+            setShowPicker(true);
+          }}
           activeOpacity={0.7}
         >
           <View
@@ -866,6 +900,13 @@ export default function QuickLogScreen() {
                 >
                   {selectedExercise.muscleGroup} · {selectedExercise.equipment}
                 </Text>
+                {routineName && (
+                  <Text
+                    style={[styles.exerciseMeta, { color: colors.primary }]}
+                  >
+                    {routineName}
+                  </Text>
+                )}
               </>
             ) : (
               <Text
@@ -1738,9 +1779,18 @@ export default function QuickLogScreen() {
           <View
             style={[styles.modalHeader, { borderBottomColor: colors.border }]}
           >
-            <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-              Select Exercise
-            </Text>
+            <View style={styles.pickerTitleWrap}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                {pickerMode === "library"
+                  ? "Add Exercise to Routine"
+                  : "Select Exercise"}
+              </Text>
+              {routineName && (
+                <Text style={[styles.pickerRoutine, { color: colors.primary }]}>
+                  {routineName}
+                </Text>
+              )}
+            </View>
             <TouchableOpacity onPress={() => setShowPicker(false)} hitSlop={12}>
               <Feather
                 style={{
@@ -1752,6 +1802,21 @@ export default function QuickLogScreen() {
               />
             </TouchableOpacity>
           </View>
+          {pickerMode === "library" && (
+            <TouchableOpacity
+              style={styles.pickerBackBtn}
+              onPress={() => {
+                setPickerMode("routine");
+                setPickerQuery("");
+              }}
+              activeOpacity={0.75}
+            >
+              <Feather name="arrow-left" size={14} color={colors.primary} />
+              <Text style={[styles.pickerBackText, { color: colors.primary }]}>
+                Back to {routineName}
+              </Text>
+            </TouchableOpacity>
+          )}
           <View
             style={[
               styles.modalSearch,
@@ -1769,8 +1834,47 @@ export default function QuickLogScreen() {
               autoFocus
             />
           </View>
+          {pickerMode === "routine" && activeRoutine && (
+            <TouchableOpacity
+              style={[styles.newExerciseBtn, { borderColor: colors.primary }]}
+              onPress={() => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setPickerMode("library");
+                setPickerQuery("");
+              }}
+              activeOpacity={0.75}
+            >
+              <Feather name="plus-circle" size={16} color={colors.primary} />
+              <Text style={[styles.newExerciseText, { color: colors.primary }]}>
+                Add exercise to routine
+              </Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={[styles.newExerciseBtn, { borderColor: colors.border }]}
+            onPress={() => {
+              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowPicker(false);
+              router.push("/new-exercise");
+            }}
+            activeOpacity={0.75}
+          >
+            <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+            <Text
+              style={[
+                styles.newExerciseText,
+                { color: colors.mutedForeground },
+              ]}
+            >
+              Create new exercise
+            </Text>
+          </TouchableOpacity>
           <FlatList
-            data={filteredExercises}
+            data={
+              pickerMode === "library"
+                ? filteredLibraryExercises
+                : filteredExercises
+            }
             keyExtractor={(item: Exercise) => item.id}
             contentContainerStyle={styles.modalList}
             showsVerticalScrollIndicator={false}
@@ -1789,13 +1893,21 @@ export default function QuickLogScreen() {
                         : colors.border,
                   },
                 ]}
-                onPress={() => {
+                onPress={async () => {
                   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (
+                    pickerMode === "library" &&
+                    activeRoutine &&
+                    !routineExerciseIds.has(item.id)
+                  ) {
+                    await addExerciseToRoutine(activeRoutine.id, item.id);
+                  }
                   setSelectedExercise(item);
                   setSessionsExpanded(false);
                   setVisibleSessions(3);
                   setShowPicker(false);
                   setPickerQuery("");
+                  setPickerMode("routine");
                 }}
                 activeOpacity={0.7}
               >
@@ -1814,8 +1926,20 @@ export default function QuickLogScreen() {
                     {item.muscleGroup} · {item.equipment}
                   </Text>
                 </View>
-                {selectedExercise?.id === item.id && (
-                  <Feather name="check" size={16} color={colors.primary} />
+                {pickerMode === "library" ? (
+                  routineExerciseIds.has(item.id) ? (
+                    <Feather name="check" size={16} color={colors.primary} />
+                  ) : (
+                    <Text
+                      style={[styles.addLibraryText, { color: colors.primary }]}
+                    >
+                      Add
+                    </Text>
+                  )
+                ) : (
+                  selectedExercise?.id === item.id && (
+                    <Feather name="check" size={16} color={colors.primary} />
+                  )
                 )}
               </TouchableOpacity>
             )}
@@ -1859,14 +1983,10 @@ export default function QuickLogScreen() {
               </Text>
               <Text style={[styles.prWeight, { color: colors.foreground }]}>
                 {prResult?.newWeight} kg
-                {prResult?.newReps != null
-                  ? ` × ${prResult.newReps} reps`
-                  : ""}
+                {prResult?.newReps != null ? ` × ${prResult.newReps} reps` : ""}
               </Text>
               {prResult?.oldWeight != null && (
-                <Text
-                  style={[styles.prOld, { color: colors.mutedForeground }]}
-                >
+                <Text style={[styles.prOld, { color: colors.mutedForeground }]}>
                   was {prResult.oldWeight} kg
                 </Text>
               )}
@@ -1954,7 +2074,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 12,
   },
+  pickerTitleWrap: { flex: 1, gap: 2 },
   headerCenter: { flex: 1 },
+  pickerRoutine: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   headerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
   saveHeaderBtn: {
     paddingHorizontal: 16,
@@ -2225,6 +2347,27 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   modalSearchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  newExerciseBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 7,
+  },
+  newExerciseText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  pickerBackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+  },
+  pickerBackText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  addLibraryText: { fontSize: 13, fontFamily: "Inter_700Bold" },
   modalList: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
   modalItem: {
     flexDirection: "row",

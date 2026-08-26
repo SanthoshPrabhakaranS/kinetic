@@ -65,6 +65,7 @@ export interface Routine {
   id: string;
   name: string;
   type: RoutineType;
+  weekdays: number[];
   exercises: RoutineExercise[];
 }
 
@@ -72,6 +73,7 @@ export interface UserProfile {
   name: string;
   onboardingComplete: boolean;
   selectedRoutineType: RoutineType | null;
+  activeRoutineId: string | null;
   weightUnit: "kg" | "lbs";
   targetWeight: number | null;
   weightGoalType: "loss" | "gain" | null;

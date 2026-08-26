@@ -32,13 +32,42 @@ function isNextDay(a: string, b: string): boolean {
   return toDateKey(addDays(keyToDate(b), 1)) === a;
 }
 
+const ALL_WEEKDAYS = [0, 1, 2, 3, 4, 5, 6];
+
+function normalizeWeekdays(weekdays?: number[]): number[] {
+  const normalized = [...new Set(weekdays ?? ALL_WEEKDAYS)].filter(
+    (day) => Number.isInteger(day) && day >= 0 && day <= 6,
+  );
+  return normalized.length > 0
+    ? normalized.sort((a, b) => a - b)
+    : ALL_WEEKDAYS;
+}
+
+function isScheduledDate(key: string, weekdays: number[]): boolean {
+  return weekdays.includes(keyToDate(key).getDay());
+}
+
+function previousScheduledDate(key: string, weekdays: number[]): string {
+  let date = addDays(keyToDate(key), -1);
+  while (!isScheduledDate(toDateKey(date), weekdays)) {
+    date = addDays(date, -1);
+  }
+  return toDateKey(date);
+}
+
+function isPreviousScheduledDate(
+  currentKey: string,
+  previousKey: string,
+  weekdays: number[],
+): boolean {
+  return previousScheduledDate(currentKey, weekdays) === previousKey;
+}
+
 /**
  * Returns the set of unique workout day keys from a list of logs.
  * Multiple logs on the same day count as a single workout day.
  */
-export function getActiveDates(
-  logs: { date: string }[],
-): Set<string> {
+export function getActiveDates(logs: { date: string }[]): Set<string> {
   const active = new Set<string>();
   for (const log of logs) {
     if (typeof log.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(log.date)) {
@@ -84,7 +113,9 @@ export interface StreakInfo {
 export function calcStreak(
   activeDates: Set<string>,
   todayKey: string = getTodayKey(),
+  weekdays?: number[],
 ): StreakInfo {
+  const schedule = normalizeWeekdays(weekdays);
   const today = new Date(todayKey);
   const yesterdayKey = toDateKey(addDays(today, -1));
   const lastWorkoutKey = toDateKey(addDays(today, 1));
@@ -94,26 +125,45 @@ export function calcStreak(
     if (key <= lastWorkoutKey) keys.push(key);
   }
   keys.sort();
+  const scheduledKeys = keys.filter((key) => isScheduledDate(key, schedule));
 
   let current = 0;
-  let atRisk = false;
+  const todayIsScheduled = isScheduledDate(todayKey, schedule);
+  let atRisk = todayIsScheduled && !activeDates.has(todayKey);
 
-  const hasToday = activeDates.has(todayKey);
-  const hasYesterday = activeDates.has(yesterdayKey);
-
-  if (hasToday || hasYesterday) {
-    const startKey = hasToday ? todayKey : yesterdayKey;
-    atRisk = !hasToday;
-    let cursor = keyToDate(startKey);
-    while (activeDates.has(toDateKey(cursor))) {
+  const startKey =
+    todayIsScheduled && activeDates.has(todayKey)
+      ? todayKey
+      : previousScheduledDate(todayKey, schedule);
+  if (activeDates.has(startKey)) {
+    let cursorKey = startKey;
+    while (activeDates.has(cursorKey)) {
       current += 1;
-      cursor = addDays(cursor, -1);
+      cursorKey = previousScheduledDate(cursorKey, schedule);
     }
+  }
+
+  let best = 0;
+  let run = 0;
+  for (let index = 0; index < scheduledKeys.length; index += 1) {
+    if (
+      index > 0 &&
+      isPreviousScheduledDate(
+        scheduledKeys[index]!,
+        scheduledKeys[index - 1]!,
+        schedule,
+      )
+    ) {
+      run += 1;
+    } else {
+      run = 1;
+    }
+    best = Math.max(best, run);
   }
 
   return {
     current,
-    best: longestRun(keys),
+    best,
     atRisk,
     lastWorkout: keys.length > 0 ? keys[keys.length - 1]! : null,
   };
